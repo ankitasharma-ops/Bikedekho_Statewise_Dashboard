@@ -280,7 +280,11 @@
     </div>
     <div class="header-actions">
       <button class="btn ghost" id="globalLabelsBtn" type="button">Labels: Off</button>
-      <button class="btn ghost" id="uploadBtn2">Change file</button>
+      <!-- "Change file" is intentionally hidden — the hosted dashboard auto-loads
+           data from the repo and viewers should not be uploading their own files.
+           The button still exists in the DOM so the manual upload code path keeps
+           working as a development fallback. -->
+      <button class="btn ghost" id="uploadBtn2" style="display:none">Change file</button>
     </div>
   </div>
 </header>
@@ -893,6 +897,10 @@ const BUNDLED_DATA_CANDIDATES = [
   'retail_data.xlsx'
 ];
 
+// Path we actually loaded the data from — remembered so we can ask the GitHub API
+// for that file's last-commit date.
+let bundledDataPathUsed = '';
+
 async function tryAutoLoadBundledData() {
   for (const path of BUNDLED_DATA_CANDIDATES) {
     try {
@@ -907,8 +915,11 @@ async function tryAutoLoadBundledData() {
       const file = new File([blob], filename, {
         type: blob.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       });
+      bundledDataPathUsed = path;
       console.log('Loaded bundled data from', path);
       handleFile(file);
+      // Ask GitHub for the file's actual last-commit date and update the stamp.
+      stampGithubCommitDate(path);
       return;
     } catch (e) {
       // Try the next candidate
@@ -917,6 +928,45 @@ async function tryAutoLoadBundledData() {
   console.log('No bundled data found — showing upload UI.');
 }
 window.addEventListener('DOMContentLoaded', tryAutoLoadBundledData);
+
+// ----- "Data last updated" via GitHub commit history ----------------------------
+// When hosted at https://<owner>.github.io/<repo>/, we can use the unauthenticated
+// GitHub API to look up the latest commit that touched the data file. That gives
+// the exact date the file was last replaced in the repo — better than inferring
+// from the latest month inside the data, which can lag months behind a refresh.
+async function stampGithubCommitDate(filePath) {
+  try {
+    const host = window.location.hostname;
+    if (!host.endsWith('.github.io')) return;          // not on GitHub Pages → skip
+    const owner = host.split('.')[0];
+    const segments = window.location.pathname.split('/').filter(Boolean);
+    // First path segment is the repo name when the site is a project page;
+    // a user/organisation page sits at the host root with no leading segment.
+    const repo = segments[0];
+    if (!owner || !repo) return;
+
+    const apiUrl = `https://api.github.com/repos/${owner}/${repo}/commits`
+      + `?path=${encodeURIComponent(filePath)}&per_page=1`;
+    const resp = await fetch(apiUrl, { headers: { 'Accept': 'application/vnd.github+json' } });
+    if (!resp.ok) {
+      console.log('GitHub commit-date lookup failed (HTTP ' + resp.status + ')');
+      return;
+    }
+    const arr = await resp.json();
+    if (!Array.isArray(arr) || !arr.length) return;
+    const iso = arr[0].commit && arr[0].commit.author && arr[0].commit.author.date;
+    if (!iso) return;
+    const d = new Date(iso);
+    if (isNaN(d)) return;
+    const stamp = document.getElementById('dataUpdated');
+    if (!stamp) return;
+    // Indian format: "17 March 2026"
+    stamp.textContent = d.getDate() + ' ' + MONTHS_FULL[d.getMonth()] + ' ' + d.getFullYear();
+    stamp.title = 'Last commit: ' + d.toLocaleString();
+  } catch (e) {
+    console.log('GitHub commit-date lookup error:', e.message);
+  }
+}
 
 let currentWorkbook = null;
 
