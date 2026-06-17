@@ -881,26 +881,40 @@ dropzone.addEventListener('drop', e => { e.preventDefault(); dropzone.classList.
 fileInput.addEventListener('change', e => { if (e.target.files.length) handleFile(e.target.files[0]); });
 
 // ----- Auto-load bundled data ---------------------------------------------------
-// When this dashboard is hosted (e.g. GitHub Pages), it will try to fetch a file
-// named `data/state_retail_data.xlsx` sitting next to the HTML. If that exists, it
-// loads automatically — viewers never see the upload UI. If the fetch fails
-// (404 / file system access from disk / etc), we fall back to the manual upload dropzone.
+// When hosted on GitHub Pages (or any web server), the dashboard tries to fetch a
+// bundled Excel sitting next to the HTML. It checks several candidate paths so
+// the repo layout is forgiving — the file can be at the root OR inside a `data/`
+// folder, with either the new or old default filename. If none of them load,
+// the manual upload dropzone is shown.
+const BUNDLED_DATA_CANDIDATES = [
+  'data/state_retail_data.xlsx',
+  'state_retail_data.xlsx',
+  'data/retail_data.xlsx',
+  'retail_data.xlsx'
+];
+
 async function tryAutoLoadBundledData() {
-  try {
-    // Cache-busting query string + no-store: ensures the latest version is fetched
-    // every time the page is opened, so simply replacing the file in the repo gives
-    // viewers fresh data on their next refresh.
-    const url = 'data/state_retail_data.xlsx?t=' + Date.now();
-    const resp = await fetch(url, { cache: 'no-store' });
-    if (!resp.ok) throw new Error('Bundled data not available (HTTP ' + resp.status + ')');
-    const blob = await resp.blob();
-    if (!blob || blob.size < 1024) throw new Error('Bundled data file looks empty');
-    const file = new File([blob], 'state_retail_data.xlsx', { type: blob.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    handleFile(file);
-  } catch (e) {
-    // Silent fallback — the manual dropzone is already visible. Logged for debugging only.
-    console.log('Auto-load skipped:', e.message);
+  for (const path of BUNDLED_DATA_CANDIDATES) {
+    try {
+      // Cache-busting + no-store: ensures viewers see the latest version on every
+      // visit, so replacing the file in the repo gives fresh data on next refresh.
+      const url = path + '?t=' + Date.now();
+      const resp = await fetch(url, { cache: 'no-store' });
+      if (!resp.ok) continue;
+      const blob = await resp.blob();
+      if (!blob || blob.size < 1024) continue;
+      const filename = path.split('/').pop();
+      const file = new File([blob], filename, {
+        type: blob.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      console.log('Loaded bundled data from', path);
+      handleFile(file);
+      return;
+    } catch (e) {
+      // Try the next candidate
+    }
   }
+  console.log('No bundled data found — showing upload UI.');
 }
 window.addEventListener('DOMContentLoaded', tryAutoLoadBundledData);
 
