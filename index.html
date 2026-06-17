@@ -1,0 +1,2891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>BikeDekho Retail Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-chart-treemap@2.3.1/dist/chartjs-chart-treemap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@2.0.1/dist/chartjs-chart-matrix.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<style>
+  :root {
+    --primary: #E63946;
+    --primary-dark: #C1121F;
+    --accent: #F77F00;
+    --bg: #F4F6F9;
+    --card: #FFFFFF;
+    --text: #1A1D23;
+    --text-muted: #6B7280;
+    --border: #E5E7EB;
+    --border-strong: #D1D5DB;
+    --success: #10B981;
+    --danger: #EF4444;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-lg: 0 10px 25px rgba(0,0,0,0.08), 0 4px 10px rgba(0,0,0,0.04);
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  /* IMPORTANT: do NOT set height:100% on <body>. A fixed height limits the containing
+     block for position:sticky so the header/tabs release once you scroll past one
+     viewport height. min-height keeps the body taller than the viewport when content
+     grows but doesn't break sticky. */
+  html { height: 100%; }
+  body { min-height: 100%; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Sticky wrapper: stacks header + tabs into one block that pins to the top */
+  .sticky-shell {
+    position: sticky;
+    top: 0;
+    z-index: 500;
+    background: white;
+  }
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white; padding: 18px 22px;
+    box-shadow: var(--shadow-lg);
+  }
+  .header-inner { max-width: 1500px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .logo { width: 40px; height: 40px; border-radius: 10px; background: rgba(255,255,255,0.2); display: grid; place-items: center; font-weight: 800; font-size: 18px; }
+  .brand-text h1 { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+  .brand-text p { font-size: 12px; opacity: 0.85; }
+  .header-actions { display: flex; gap: 8px; align-items: center; }
+  .btn { background: white; color: var(--primary); border: none; padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.15s; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  .btn.ghost { background: rgba(255,255,255,0.18); color: white; }
+  .btn.ghost:hover { background: rgba(255,255,255,0.28); }
+  .btn.ghost.active { background: white; color: var(--primary); }
+  .btn.ghost.active:hover { background: #FFE7EA; }
+
+  /* Tabs (lives inside .sticky-shell so position is handled by the wrapper) */
+  .tabs { background: white; border-bottom: 1px solid var(--border); }
+  .tabs-inner { max-width: 1500px; margin: 0 auto; padding: 0 22px; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+  .tabs-inner::-webkit-scrollbar { display: none; }
+  .tab { background: none; border: none; padding: 14px 18px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text-muted); font-family: inherit; border-bottom: 3px solid transparent; white-space: nowrap; transition: all 0.15s; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+  /* Container */
+  .container { max-width: 1500px; margin: 0 auto; padding: 20px 22px; }
+
+  /* Upload */
+  .upload-card { background: var(--card); border: 2px dashed var(--border-strong); border-radius: var(--radius); padding: 28px 20px; text-align: center; margin-bottom: 18px; cursor: pointer; transition: all 0.2s; }
+  .upload-card:hover, .upload-card.dragover { border-color: var(--primary); background: #FFF5F5; }
+  .upload-card h3 { font-size: 15px; margin-bottom: 4px; font-weight: 600; }
+  .upload-card p { color: var(--text-muted); font-size: 13px; }
+  .upload-icon { width: 46px; height: 46px; margin: 0 auto 10px; background: #FFEAEA; color: var(--primary); border-radius: 50%; display: grid; place-items: center; font-size: 20px; }
+  #fileInput { display: none; }
+  .filename { margin-top: 8px; font-size: 13px; color: var(--primary); font-weight: 500; }
+  .col-detect { font-size: 12px; color: var(--text-muted); margin-top: 6px; font-style: italic; }
+
+  /* Filters — sticky just below the tabs so they stay visible while scrolling.
+     `--stickyTop` is set at runtime to the actual measured height of .sticky-shell. */
+  .filters {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 14px;
+    margin-bottom: 18px;
+    box-shadow: var(--shadow), 0 6px 12px rgba(0,0,0,0.04);
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    align-items: end;
+    position: sticky;
+    top: var(--stickyTop, 128px);
+    z-index: 300;
+  }
+  .filter-group label { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+  .filter-group select { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; background: white; transition: border-color 0.15s; }
+  .filter-group select:focus { outline: none; border-color: var(--primary); }
+  .filter-group .filter-hint { font-size: 10px; color: var(--text-muted); margin-top: 3px; font-style: italic; }
+  /* From / To single-select range pickers — styled to match the custom dropdowns */
+  .range-select { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; background: white; color: var(--text); cursor: pointer; -webkit-appearance: menulist; }
+  .range-select:hover, .range-select:focus { border-color: var(--primary); outline: none; }
+  .reset-btn { padding: 9px 12px; background: #FEE; color: var(--primary); border: 1px solid #FCC; border-radius: 8px; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; align-self: start; }
+  .reset-btn:hover { background: #FDD; }
+
+  /* Custom checkbox dropdown */
+  .cb-dd { position: relative; width: 100%; }
+  .cb-dd-btn { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; background: white; cursor: pointer; text-align: left; color: var(--text); transition: border-color 0.15s; }
+  .cb-dd-btn:hover, .cb-dd.open .cb-dd-btn { border-color: var(--primary); }
+  .cb-dd-summary { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+  .cb-dd-caret { color: var(--text-muted); font-size: 11px; transition: transform 0.15s; }
+  .cb-dd.open .cb-dd-caret { transform: rotate(180deg); }
+  .cb-dd-panel { position: absolute; top: calc(100% + 4px); left: 0; right: 0; min-width: 180px; max-width: 320px; max-height: 280px; overflow-y: auto; background: white; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); z-index: 800; padding: 6px; }
+  .cb-dd-panel label { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 4px; font-size: 13px; cursor: pointer; user-select: none; }
+  .cb-dd-panel label:hover { background: #F4F6F9; }
+  .cb-dd-panel label.cb-dd-all { font-weight: 600; color: var(--primary); }
+  .cb-dd-panel input[type="checkbox"] { accent-color: var(--primary); margin: 0; flex-shrink: 0; }
+  .cb-dd-divider { height: 1px; background: var(--border); margin: 4px 0; }
+  .cb-dd-search { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; font-family: inherit; margin-bottom: 4px; box-sizing: border-box; }
+  .card-slicer { min-width: 160px; max-width: 260px; }
+  .card-slicer .cb-dd-btn { padding: 6px 8px; font-size: 12px; }
+  /* Data label toggle */
+  .label-toggle { background: #F1F3F5; border: 1px solid var(--border); color: var(--text-muted); font-size: 11px; font-weight: 600; padding: 4px 8px; border-radius: 6px; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+  .label-toggle:hover { background: #E5E7EB; color: var(--text); }
+  .label-toggle.active { background: var(--primary); color: white; border-color: var(--primary); }
+  /* Choropleth */
+  .legend-bar { background: white; padding: 6px 10px; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,0.15); font-size: 11px; line-height: 1.4; }
+  .legend-bar i { display: inline-block; width: 14px; height: 12px; margin-right: 4px; vertical-align: middle; opacity: 0.85; }
+  /* State labels overlaid on the choropleth */
+  .state-label { background: rgba(255,255,255,0.6); border: none; box-shadow: none; padding: 1px 4px; border-radius: 3px; font-size: 10px; font-weight: 700; color: #1A1D23; white-space: nowrap; }
+  .state-label::before { display: none; } /* hide Leaflet tooltip arrow */
+  /* Map control: labels toggle */
+  .map-label-toggle { background: white; color: var(--text-muted); border: 1px solid #B8C2CC; padding: 4px 10px; border-radius: 4px; font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+  .map-label-toggle:hover { background: #F4F6F9; color: var(--text); }
+  .map-label-toggle.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+  /* KPIs */
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .kpi { background: var(--card); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); border-left: 3px solid var(--primary); }
+  .kpi-label { font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+  .kpi-value { font-size: 22px; font-weight: 700; margin-top: 4px; letter-spacing: -0.02em; word-break: break-word; }
+  .kpi-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .kpi-delta { font-size: 12px; font-weight: 600; margin-top: 4px; display: inline-flex; align-items: center; gap: 3px; }
+  .kpi-delta.up { color: var(--success); }
+  .kpi-delta.down { color: var(--danger); }
+
+  /* Grid */
+  .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px; margin-bottom: 18px; }
+  .card { background: var(--card); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); min-width: 0; }
+  .card.col-12 { grid-column: span 12; }
+  .card.col-8 { grid-column: span 8; }
+  .card.col-6 { grid-column: span 6; }
+  .card.col-4 { grid-column: span 4; }
+  .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; flex-wrap: wrap; }
+  .card-title { font-size: 14px; font-weight: 600; }
+  .card-subtitle { font-size: 12px; color: var(--text-muted); font-weight: 400; margin-top: 1px; }
+  /* "Showing: …" chip describing which filters / slicers are currently active */
+  .card-filterchip { font-size: 11px; color: #475569; background: #F1F3F5; padding: 4px 10px; border-radius: 999px; margin-bottom: 10px; display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card-filterchip b { color: var(--primary); font-weight: 700; }
+  .chart-box { position: relative; height: 280px; }
+  .chart-box.tall { height: 340px; }
+  .chart-box.xtall { height: 420px; }
+  /* Shared height for the EV vs ICE Trend + EV Readiness by State pair */
+  .chart-box.evpair { height: 360px; }
+  .map-box { height: 460px; border-radius: 8px; overflow: hidden; }
+  .map-box.short { height: 420px; }
+
+  /* Matrix table */
+  .matrix-wrap {
+    /* Explicit overflow on both axes — some browsers fail to render the horizontal
+       scrollbar with the bare `overflow: auto` shorthand when sticky cells are present. */
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: 70vh;
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: white;
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+  /* Make the scrollbar visibly present on macOS / iOS where it auto-hides */
+  .matrix-wrap::-webkit-scrollbar { height: 12px; width: 12px; }
+  .matrix-wrap::-webkit-scrollbar-track { background: #F1F3F5; }
+  .matrix-wrap::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 6px; }
+  .matrix-wrap::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+  table.matrix {
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 12px;
+    width: max-content;          /* tells the browser to size to its own widest row */
+    min-width: max-content;      /* prevent any flex/grid ancestor from squashing it */
+    table-layout: auto;
+  }
+  table.matrix th, table.matrix td { padding: 7px 10px; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); white-space: nowrap; text-align: right; }
+  /* Fixed widths so the OEM column's `left: 170px` aligns to the State column's edge */
+  table.matrix th.group-hdr, table.matrix td.group-cell { text-align: left; position: sticky; left: 0; background: #FAFBFC; font-weight: 600; z-index: 2; width: 170px; min-width: 170px; max-width: 170px; overflow: hidden; text-overflow: ellipsis; }
+  table.matrix th.group-hdr-oem, table.matrix td.group-cell-oem { left: 170px; width: 160px; min-width: 160px; max-width: 160px; }
+  /* Numeric cells get a smaller min-width so the table doesn't over-grow */
+  table.matrix tbody td:not(.group-cell) { min-width: 70px; }
+  table.matrix thead th { position: sticky; top: 0; background: #F1F3F5; z-index: 3; font-weight: 600; color: var(--text-muted); text-transform: uppercase; font-size: 11px; letter-spacing: 0.04em; }
+  table.matrix thead tr:first-child th { border-bottom: 2px solid var(--border); }
+  table.matrix thead th.group-hdr { z-index: 4; background: #F1F3F5; }
+  table.matrix tr.state-row { background: #FFF5F5; font-weight: 700; }
+  table.matrix tr.state-row td { border-top: 1px solid var(--primary); }
+  /* Sticky cells need an opaque background that matches the row — otherwise content
+     shows through during horizontal scroll. */
+  table.matrix tr.state-row td.group-cell { background: #FFF5F5; }
+  table.matrix tbody tr:hover td:not(.group-cell) { background: #FFFBF0; }
+  table.matrix td.delta-up { color: var(--success); font-weight: 600; }
+  table.matrix td.delta-down { color: var(--danger); font-weight: 600; }
+  .matrix-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  .matrix-controls label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+  .matrix-controls select { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; }
+
+  /* Empty states */
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); background: white; border-radius: var(--radius); box-shadow: var(--shadow); }
+  .empty-state .big { font-size: 44px; margin-bottom: 10px; }
+  .empty-state h3 { color: var(--text); margin-bottom: 4px; }
+  .no-data { text-align: center; padding: 40px; color: var(--text-muted); font-size: 13px; }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text); color: white; padding: 11px 18px; border-radius: 8px; font-size: 13px; z-index: 900; box-shadow: var(--shadow-lg); opacity: 0; pointer-events: none; transition: all 0.2s; max-width: 90vw; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+  .toast.error { background: var(--danger); }
+
+  .page { display: none; }
+  .page.active { display: block; }
+  .hidden { display: none !important; }
+
+  /* Responsive */
+  @media (max-width: 1000px) {
+    .card.col-8, .card.col-6, .card.col-4 { grid-column: span 12; }
+    .chart-box { height: 260px; }
+  }
+  @media (max-width: 640px) {
+    .header { padding: 14px 14px; }
+    .brand-text h1 { font-size: 15px; }
+    .brand-text p { display: none; }
+    .tabs-inner { padding: 0 14px; }
+    .tab { padding: 12px 12px; font-size: 12px; }
+    .container { padding: 14px; }
+    .kpis { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .kpi { padding: 12px; }
+    .kpi-value { font-size: 16px; }
+    .filters { grid-template-columns: 1fr 1fr; }
+    .chart-box { height: 230px; }
+    .map-box { height: 340px; }
+    table.matrix th.group-hdr-oem, table.matrix td.group-cell-oem { left: 130px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="sticky-shell" id="stickyShell">
+<header class="header">
+  <div class="header-inner">
+    <div class="brand">
+      <div class="logo">BD</div>
+      <div class="brand-text">
+        <h1>BikeDekho Retail Dashboard</h1>
+        <p>Data last updated: <span id="dataUpdated">—</span></p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn ghost" id="globalLabelsBtn" type="button">Labels: Off</button>
+      <button class="btn ghost" id="uploadBtn2">Change file</button>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs">
+  <div class="tabs-inner">
+    <button class="tab active" data-page="1">Overview</button>
+    <button class="tab" data-page="2">OEM Analysis</button>
+    <button class="tab" data-page="3">State Analysis</button>
+    <button class="tab" data-page="4">Matrix Table</button>
+  </div>
+</nav>
+</div>
+
+<div class="container">
+
+  <!-- Hidden file input (kept outside dropzone so it survives re-renders) -->
+  <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none;" />
+
+  <!-- Upload (shown until data loaded) -->
+  <div class="upload-card" id="dropzone">
+    <div class="upload-icon">⬆</div>
+    <h3>Drop your retail Excel here, or click to browse</h3>
+    <p>Your file stays on your device — nothing is uploaded anywhere.</p>
+    <div class="filename" id="filenameDisplay"></div>
+    <div class="col-detect" id="colDetect"></div>
+  </div>
+
+  <!-- Manual column mapper (shown when auto-detection fails) -->
+  <div id="mapperCard" class="card hidden" style="margin-bottom: 18px;">
+    <h3 style="margin-bottom: 4px; font-size: 15px;">Map your columns</h3>
+    <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 14px;">Pick which column in your file is which. Required fields are marked with *. If the header row isn't the first row of your sheet, change "Header row".</p>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 14px;">
+      <div class="filter-group"><label>Sheet</label><select id="m_sheet"></select></div>
+      <div class="filter-group"><label>Header row (1-based)</label><input type="number" id="m_headerRow" min="1" value="1" style="width:100%; padding:9px 10px; border:1px solid var(--border); border-radius:8px; font-size:13px; font-family:inherit;" /></div>
+      <div class="filter-group"><label>Year *</label><select id="m_year"></select></div>
+      <div class="filter-group"><label>Month *</label><select id="m_month"></select></div>
+      <div class="filter-group"><label>State *</label><select id="m_state"></select></div>
+      <div class="filter-group"><label>Retail / Volume *</label><select id="m_retail"></select></div>
+      <div class="filter-group"><label>OEM (optional)</label><select id="m_oem"></select></div>
+      <div class="filter-group"><label>Fuel (optional)</label><select id="m_fuel"></select></div>
+    </div>
+    <div id="mapperPreview" style="overflow-x:auto; margin-bottom: 14px; border: 1px solid var(--border); border-radius: 8px; max-height: 220px;"></div>
+    <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+      <button class="btn" id="mapperLoadBtn" style="background: var(--primary); color: white;">Load dashboard</button>
+      <button class="btn" id="mapperWideBtn" style="background: var(--accent); color: white;" title="Use when fuel types are column headers (Vahan-style export)">Load as wide (fuel columns)</button>
+      <span id="mapperHint" style="color: var(--text-muted); font-size: 12px;"></span>
+    </div>
+  </div>
+
+  <!-- Shared filters -->
+  <div class="filters hidden" id="filtersBar">
+    <div class="filter-group"><label>From</label><select id="f_fromYm" class="range-select"></select></div>
+    <div class="filter-group"><label>To</label><select id="f_toYm" class="range-select"></select></div>
+    <div class="filter-group"><label>State</label><div id="f_state"></div></div>
+    <div class="filter-group"><label>OEM</label><div id="f_oem"></div></div>
+    <div class="filter-group"><label>Fuel</label><div id="f_fuel"></div></div>
+    <div class="filter-group"><label>&nbsp;</label><button class="reset-btn" id="resetBtn">Reset filters</button></div>
+  </div>
+
+  <!-- =============================  PAGE 1: OVERVIEW  ============================ -->
+  <section class="page active" id="page1">
+    <div class="kpis" id="kpis"></div>
+
+    <div class="grid">
+      <div class="card col-6">
+        <div class="card-header"><div><div class="card-title">Retail Trend</div><div class="card-subtitle">Monthly retail volume</div></div></div>
+        <div class="chart-box tall"><canvas id="c_retailTrend"></canvas></div>
+      </div>
+      <div class="card col-6">
+        <div class="card-header"><div><div class="card-title">EV Penetration Trend</div><div class="card-subtitle">EV share of monthly retail</div></div></div>
+        <div class="chart-box tall"><canvas id="c_evTrend"></canvas></div>
+      </div>
+
+      <div class="card col-12">
+        <div class="card-header">
+          <div><div class="card-title">India — State-wise Retail</div><div class="card-subtitle">Colour = retail volume. Hover for YoY.</div></div>
+        </div>
+        <div id="mapBox" class="map-box"></div>
+        <div class="no-data hidden" id="mapFallback">Map could not load — showing state distribution instead.</div>
+      </div>
+
+      <div class="card col-6">
+        <div class="card-header">
+          <div><div class="card-title">Top States by Retail Volume</div><div class="card-subtitle" id="sub_topStates">&nbsp;</div></div>
+          <div class="card-slicer" id="slicer_topStates_oem"></div>
+        </div>
+        <div class="chart-box tall"><canvas id="c_topStates"></canvas></div>
+      </div>
+      <div class="card col-6">
+        <div class="card-header">
+          <div><div class="card-title">Top OEMs by Retail Volume</div><div class="card-subtitle" id="sub_topOems">&nbsp;</div></div>
+          <div class="card-slicer" id="slicer_topOems_state"></div>
+        </div>
+        <div class="chart-box tall"><canvas id="c_topOems"></canvas></div>
+      </div>
+
+      <div class="card col-6">
+        <div class="card-header">
+          <div><div class="card-title">EV vs ICE Trend</div><div class="card-subtitle">Monthly fuel mix as 100% stacked share</div></div>
+        </div>
+        <div class="chart-box evpair"><canvas id="c_evIceTime"></canvas></div>
+      </div>
+      <div class="card col-6">
+        <div class="card-header">
+          <div><div class="card-title">EV Readiness by State</div><div class="card-subtitle">Each state's fuel mix for the selected period — sorted by EV share %.</div></div>
+        </div>
+        <div class="chart-box evpair"><canvas id="c_evByState"></canvas></div>
+      </div>
+
+      <div class="card col-12">
+        <div class="card-header">
+          <div><div class="card-title">Fuel Split Over Time</div><div class="card-subtitle">Stacked monthly volumes</div></div>
+          <div style="display:flex; flex-direction:row; gap:8px; flex-wrap:nowrap; align-items:flex-end;">
+            <div class="card-slicer" id="slicer_fuelStacked_state"></div>
+            <div class="card-slicer" id="slicer_fuelStacked_oem"></div>
+          </div>
+        </div>
+        <div class="chart-box tall"><canvas id="c_fuelStacked"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =============================  PAGE 2: OEM ANALYSIS  ============================ -->
+  <section class="page" id="page2">
+    <div class="grid">
+      <div class="card col-12">
+        <div class="card-header">
+          <div><div class="card-title">OEM Share Trend</div><div class="card-subtitle">Top 8 OEMs — monthly market share. Logos at line ends (drop logos in /logos folder).</div></div>
+          <div class="card-slicer" id="slicer_oemShareTrend_state"></div>
+        </div>
+        <div class="chart-box tall"><canvas id="c_oemShareTrend"></canvas></div>
+      </div>
+
+      <div class="card col-12">
+        <div class="card-header">
+          <div><div class="card-title">OEM Comparison</div><div class="card-subtitle">Left bar = From month, right bar = To month. Hover for fuel split.</div></div>
+          <div class="card-slicer" id="slicer_oemCompare_state"></div>
+        </div>
+        <div class="chart-box tall"><canvas id="c_oemCompare"></canvas></div>
+      </div>
+
+      <div class="card col-12">
+        <div class="card-header"><div><div class="card-title">Contribution to Growth</div><div class="card-subtitle">Base bar = From month, end bar = To month. Inner bars show each OEM's contribution to the delta.</div></div></div>
+        <div class="chart-box tall"><canvas id="c_waterfall"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =============================  PAGE 3: STATE ANALYSIS  ============================ -->
+  <section class="page" id="page3">
+    <div class="grid">
+      <div class="card col-12">
+        <div class="card-header">
+          <div><div class="card-title">State Retail Trend</div><div class="card-subtitle">Top 6 states over time — Pan India aggregate excluded by default.</div></div>
+          <button type="button" class="label-toggle" id="btn_stateTrend_panIndia">Show Pan India</button>
+        </div>
+        <div class="chart-box tall"><canvas id="c_stateTrend"></canvas></div>
+      </div>
+
+      <div class="card col-8">
+        <div class="card-header"><div><div class="card-title">OEM Split by State</div><div class="card-subtitle">Top 10 states, stacked by OEM</div></div></div>
+        <div class="chart-box tall"><canvas id="c_stateOem"></canvas></div>
+      </div>
+      <div class="card col-4">
+        <div class="card-header">
+          <div><div class="card-title">Fuel Split in Selected State</div><div class="card-subtitle" id="fuelStateSub">All states</div></div>
+          <div class="card-slicer" id="slicer_stateFuel_state"></div>
+        </div>
+        <div class="chart-box tall"><canvas id="c_stateFuel"></canvas></div>
+      </div>
+
+      <div class="card col-12">
+        <div class="card-header"><div><div class="card-title">State × Month Heatmap</div><div class="card-subtitle">Top 15 states — darker = higher volume</div></div></div>
+        <div class="chart-box xtall"><canvas id="c_heatmap"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =============================  PAGE 4: MATRIX TABLE  ============================ -->
+  <section class="page" id="page4">
+    <div class="card">
+      <div class="matrix-controls">
+        <label>Metric:</label>
+        <select id="matrixMetric">
+          <option value="retail">Retail volume</option>
+          <option value="mom">MoM %</option>
+          <option value="yoy">YoY %</option>
+        </select>
+        <label>Top states:</label>
+        <select id="matrixTopN">
+          <option value="5">Top 5</option>
+          <option value="10" selected>Top 10</option>
+          <option value="15">Top 15</option>
+          <option value="9999">All states</option>
+        </select>
+        <label>Top OEMs per state:</label>
+        <select id="matrixOemN">
+          <option value="3">Top 3</option>
+          <option value="5" selected>Top 5</option>
+          <option value="10">Top 10</option>
+          <option value="9999">All</option>
+        </select>
+        <button class="btn" id="exportMatrixBtn" style="background:var(--primary); color:white;">Export CSV</button>
+      </div>
+      <div class="matrix-wrap" id="matrixWrap">
+        <div class="no-data">Upload data to see the matrix.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Empty state when no data -->
+  <div class="empty-state hidden" id="emptyState">
+    <div class="big">📊</div>
+    <h3>No data loaded yet</h3>
+    <p>Upload your retail Excel file above to see the dashboard.</p>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============ STATE ============
+let rawData = [];
+let filteredData = [];   // Used for fuel-split charts (EV/ICE/CNG only when isTotal-tagged)
+let filteredTotals = []; // Used for totals/states/OEMs (ALL FUEL only when isTotal-tagged)
+// Temporal range filter: fromYm / toYm are YM strings ("2025-04") that bound the
+// time window inclusively. Empty fromYm = "All months" (no lower bound). Empty
+// toYm defaults to the latest YM in the data.
+// The other filters are still multi-select arrays (empty array = "no filter").
+const filters = { fromYm: '', toYm: '', state: [], oem: [], fuel: [] };
+let currentPage = 1;
+let detectedCols = {};
+const charts = {};
+let mapInstance = null;
+let mapLayer = null;
+let indiaGeoJSON = null;       // cached India states GeoJSON
+let mapLabelsOn = false;       // toggle for permanent state labels on the choropleth
+let globalLabelsOn = false;    // single universal toggle for chart data labels
+let dataLatestYm = '';         // latest YM present in the loaded data — drives the To picker default
+// Chart-level slicers — independent of the global filter bar.
+// Empty arrays mean "no chart-local filter" (all values pass).
+const chartSlicers = {
+  topStates:     { oem: [] },
+  topOems:       { state: [] },
+  fuelStacked:   { state: [], oem: [] },
+  evIceTime:     { state: [] },
+  oemShareTrend: { state: [] },
+  oemCompare:    { state: [] },
+  stateFuel:     { state: [] },
+  stateTrend:    { panIndia: false }  // include the "Pan India" aggregate row?
+};
+// "Today" anchor — drives the "hide future months" rule and FY detection
+const TODAY = new Date();
+const CUR_YEAR = TODAY.getFullYear();
+const CUR_MONTH = TODAY.getMonth() + 1;
+
+// Pull a sensible "series colour" out of a dataset for label colouring.
+function seriesColor(ctx) {
+  const ds = ctx && ctx.dataset;
+  if (!ds) return '#1A1D23';
+  const idx = ctx.dataIndex || 0;
+  const pick = (v) => Array.isArray(v) ? (v[idx] || v[0]) : v;
+  return pick(ds.borderColor) || pick(ds.backgroundColor) || '#1A1D23';
+}
+
+// Register data-labels plugin globally; keep OFF by default and let each chart
+// flip via dataLabelOn[chartKey] === true. The button per chart toggles the flag.
+if (typeof ChartDataLabels !== 'undefined') {
+  Chart.register(ChartDataLabels);
+  Chart.defaults.set('plugins.datalabels', {
+    // Single universal toggle drives label visibility across every chart.
+    // 'auto' lets chartjs-plugin-datalabels skip a label when it would overlap others.
+    display: () => globalLabelsOn && 'auto',
+    // Per-dataset colour matches the line / bar so labels don't blend with neighbours.
+    color: ctx => seriesColor(ctx),
+    font: { weight: '600', size: 10 },
+    formatter: (value, ctx) => {
+      if (value == null) return '';
+      if (typeof value === 'number') return fmtCompact(value);
+      if (typeof value === 'object') {
+        // Bubble chart points carry an OEM label — show the name instead of a number.
+        if ('oem' in value && value.oem) return value.oem;
+        // Treemap leaves expose `.v` (value) and `.g` (group/key).
+        if ('g' in value && value.g) return value.g;
+        if ('v' in value && typeof value.v === 'number') return fmtCompact(value.v);
+        if ('y' in value && typeof value.y === 'number') return fmtCompact(value.y);
+        return '';
+      }
+      return '';
+    },
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderRadius: 3,
+    padding: { top: 1, bottom: 1, left: 4, right: 4 },
+    anchor: 'end',
+    align: 'top',
+    offset: 4,
+    clamp: true
+  });
+}
+
+// Re-measures the sticky shell height (header + tabs) and exposes it as a CSS variable
+// so the filter bar's `top` value tracks any header changes (e.g. wrapping at narrow widths).
+function refreshStickyOffset() {
+  const shell = document.getElementById('stickyShell');
+  if (!shell) return;
+  const h = shell.getBoundingClientRect().height;
+  document.documentElement.style.setProperty('--stickyTop', h + 'px');
+}
+window.addEventListener('resize', refreshStickyOffset);
+window.addEventListener('load',   refreshStickyOffset);
+// Also run after the first frame in case fonts / images shift the header height
+setTimeout(refreshStickyOffset, 0);
+
+// Single universal Labels toggle wired to the button in the header.
+function setupGlobalLabelsToggle() {
+  const btn = document.getElementById('globalLabelsBtn');
+  if (!btn || btn.dataset.bound) return;
+  btn.dataset.bound = '1';
+  btn.addEventListener('click', () => {
+    globalLabelsOn = !globalLabelsOn;
+    btn.textContent = 'Labels: ' + (globalLabelsOn ? 'On' : 'Off');
+    btn.classList.toggle('active', globalLabelsOn);
+    // Refresh every live chart so the new display rule kicks in.
+    Object.values(charts).forEach(c => { if (c) try { c.update('none'); } catch(e){} });
+  });
+}
+const PALETTE = ['#E63946','#F77F00','#FCBF49','#06A77D','#118AB2','#7209B7','#F15BB5','#3A86FF','#8338EC','#FB5607','#38B000','#5A189A','#D62828','#E07A5F','#81B29A'];
+
+// India state centroids (approx lat/lng) — used for bubble map
+const STATE_CENTROIDS = {
+  'Andhra Pradesh':[15.9,79.7],'Arunachal Pradesh':[28.2,94.7],'Assam':[26.2,92.9],'Bihar':[25.6,85.1],
+  'Chhattisgarh':[21.3,81.8],'Goa':[15.3,74.1],'Gujarat':[22.3,71.2],'Haryana':[29.0,76.1],
+  'Himachal Pradesh':[31.1,77.2],'Jharkhand':[23.6,85.3],'Karnataka':[15.3,75.7],'Kerala':[10.9,76.3],
+  'Madhya Pradesh':[22.9,78.7],'Maharashtra':[19.8,75.7],'Manipur':[24.7,93.9],'Meghalaya':[25.5,91.4],
+  'Mizoram':[23.2,92.9],'Nagaland':[26.2,94.6],'Odisha':[20.9,85.1],'Punjab':[31.1,75.3],
+  'Rajasthan':[27.0,74.2],'Sikkim':[27.5,88.5],'Tamil Nadu':[11.1,78.7],'Telangana':[18.1,79.0],
+  'Tripura':[23.9,91.9],'Uttar Pradesh':[26.8,80.9],'Uttarakhand':[30.1,79.0],'West Bengal':[22.9,87.8],
+  'Delhi':[28.6,77.2],'Jammu And Kashmir':[33.8,76.6],'Jammu & Kashmir':[33.8,76.6],'Ladakh':[34.2,77.6],
+  'Chandigarh':[30.7,76.8],'Puducherry':[11.9,79.8],'Andaman And Nicobar':[11.7,92.7],'Andaman & Nicobar':[11.7,92.7],
+  'Dadra And Nagar Haveli':[20.2,73.0],'Daman And Diu':[20.4,72.8],'DNH and DD':[20.3,72.9],
+  'Lakshadweep':[10.6,72.6]
+};
+const MONTHS_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// State-code abbreviations for tighter labelling on the map
+const STATE_ABBREV = {
+  'Andhra Pradesh':'AP','Arunachal Pradesh':'AR','Assam':'AS','Bihar':'BR',
+  'Chhattisgarh':'CG','Goa':'GA','Gujarat':'GJ','Haryana':'HR',
+  'Himachal Pradesh':'HP','Jharkhand':'JH','Karnataka':'KA','Kerala':'KL',
+  'Madhya Pradesh':'MP','Maharashtra':'MH','Manipur':'MN','Meghalaya':'ML',
+  'Mizoram':'MZ','Nagaland':'NL','Odisha':'OD','Punjab':'PB',
+  'Rajasthan':'RJ','Sikkim':'SK','Tamil Nadu':'TN','Telangana':'TG',
+  'Tripura':'TR','Uttar Pradesh':'UP','Uttarakhand':'UK','West Bengal':'WB',
+  'Delhi':'DL','Jammu And Kashmir':'JK','Jammu & Kashmir':'JK','Ladakh':'LA',
+  'Chandigarh':'CH','Puducherry':'PY','Andaman And Nicobar':'AN',
+  'Andaman & Nicobar':'AN','Dadra And Nagar Haveli':'DN','Daman And Diu':'DD',
+  'DNH and DD':'DN+DD','Lakshadweep':'LD'
+};
+
+// ============ HELPERS ============
+function toast(msg, isErr=false) { const el=document.getElementById('toast'); el.textContent=msg; el.className='toast show'+(isErr?' error':''); setTimeout(()=>el.classList.remove('show'),3200); }
+function fmtNum(n) { if (n==null||isNaN(n)) return '0'; return Math.round(n).toLocaleString('en-IN'); }
+function fmtCompact(n) { if (n==null||isNaN(n)) return '0'; const a=Math.abs(n); if(a>=1e7) return (n/1e7).toFixed(2)+' Cr'; if(a>=1e5) return (n/1e5).toFixed(2)+' L'; if(a>=1e3) return (n/1e3).toFixed(1)+'K'; return Math.round(n).toString(); }
+function fmtPct(n, d=1) { if (n==null||isNaN(n)) return '—'; return n.toFixed(d)+'%'; }
+function destroyChart(k) { if (charts[k]) { try{charts[k].destroy();}catch(e){} charts[k]=null; } }
+function titleCase(s) { return s.toString().trim().replace(/\w\S*/g, t => t.charAt(0).toUpperCase()+t.slice(1).toLowerCase()); }
+
+function parseMonth(v) {
+  if (v == null) return null;
+  if (typeof v === 'number') return (v >= 1 && v <= 12) ? v : null;
+  const s = v.toString().trim();
+  const n = parseInt(s, 10);
+  if (!isNaN(n) && n >= 1 && n <= 12) return n;
+  const sl = s.toLowerCase().slice(0,3);
+  const idx = MONTHS_SHORT.findIndex(m => m.toLowerCase() === sl);
+  return idx >= 0 ? idx+1 : null;
+}
+function ym(y, m) { return y + '-' + String(m).padStart(2,'0'); }
+function prettyYM(key) { const [y,m]=key.split('-'); return MONTHS_SHORT[+m-1] + " '" + y.slice(2); }
+
+function normalizeState(s) {
+  if (!s) return '';
+  let t = s.toString().trim();
+  // handle variants
+  t = t.replace(/&/g, 'And');
+  t = titleCase(t);
+  return t;
+}
+function isEV(fuel) {
+  if (!fuel) return false;
+  const f = fuel.toString().toUpperCase().trim();
+  // Vahan-style fuel names that count as zero-emission / EV
+  if (f === 'PURE EV' || f === 'PLUG-IN HYBRID EV' || f === 'FUEL CELL HYDROGEN') return true;
+  if (f === 'ELECTRIC(BOV)' || f === 'SOLAR' || f === 'BEV') return true;
+  if (/^ELECTRIC\b/.test(f)) return true;
+  // Fallback to old loose match
+  if (/(^|\s)(ev|bev|phev)(\s|$|\(|\/)/.test(f.toLowerCase())) return true;
+  return false;
+}
+
+// Wide-format detection: rows are (Month, State, Maker, ALL FUEL, EV, ICE, CNG)
+// We restrict to the 4 derived fuel columns the user maintains in the source workbook.
+function detectWideFormat(firstRow) {
+  const keys = Object.keys(firstRow);
+  const find = (patterns) => {
+    for (const p of patterns) {
+      const m = keys.find(k => p.test(k.toString().trim()));
+      if (m) return m;
+    }
+    return null;
+  };
+  const monthCol = find([/^month$/i, /\bmonth\b/i]);
+  const stateCol = find([/^state$/i, /\bstate\b/i, /^state name$/i]);
+  const makerCol = find([/^maker$/i, /^oem$/i, /^manufacturer$/i, /^maker name$/i, /\bmaker\b/i, /\boem\b/i]);
+  if (!monthCol || !stateCol || !makerCol) return null;
+  // Try to find the 4 user-defined fuel columns in priority order
+  const allFuelCol = find([/^all\s*fuel$/i]);
+  const evCol      = find([/^ev$/i, /^pure\s*ev$/i]);
+  const iceCol     = find([/^ice$/i]);
+  const cngCol     = find([/^cng$/i]);
+  // The 4-column "preferred" mode: ALL FUEL plus at least one of EV/ICE/CNG
+  if (allFuelCol && (evCol || iceCol || cngCol)) {
+    const fuelCols = [];
+    if (allFuelCol) fuelCols.push(allFuelCol);
+    if (evCol)      fuelCols.push(evCol);
+    if (iceCol)     fuelCols.push(iceCol);
+    if (cngCol)     fuelCols.push(cngCol);
+    return { monthCol, stateCol, makerCol, fuelCols, mode: 'derived' };
+  }
+  // Legacy fallback: detect any column that looks like a fuel name
+  const FUEL_PATTERNS = [/petrol/i, /diesel/i, /electric/i, /\bev\b/i, /cng/i, /lpg/i, /lng/i, /hybrid/i, /ethanol/i, /methanol/i, /hydrogen/i, /\bbio[- ]/i, /flex.?fuel/i, /solar/i, /fuel.?cell/i, /methane/i, /\bhcng\b/i, /not applicable/i];
+  const fuelCols = keys.filter(k => {
+    if (k === monthCol || k === stateCol || k === makerCol) return false;
+    if (/^total$/i.test(k.toString().trim())) return false;
+    return FUEL_PATTERNS.some(p => p.test(k.toString().trim()));
+  });
+  if (fuelCols.length < 3) return null;
+  return { monthCol, stateCol, makerCol, fuelCols, mode: 'raw-fuels' };
+}
+
+// Read OEM mapping from Settings sheet. Returns Map<UPPERCASE_RAW_NAME, CleanName>.
+function readOemMapping(workbook) {
+  const map = new Map();
+  for (const sn of workbook.SheetNames) {
+    if (!/^settings?$/i.test(sn.trim())) continue;
+    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sn], { defval: null, raw: false });
+    if (!rows.length) continue;
+    const keys = Object.keys(rows[0]);
+    const rawCol   = keys.find(k => /^raw\s*name$/i.test(k.toString().trim()))
+                  || keys.find(k => /\braw\b/i.test(k.toString().trim()));
+    const cleanCol = keys.find(k => /^clean\s*oem(\s*name)?$/i.test(k.toString().trim()))
+                  || keys.find(k => /\bclean\b/i.test(k.toString().trim()));
+    if (!rawCol || !cleanCol) continue;
+    for (const r of rows) {
+      const raw = r[rawCol]; const clean = r[cleanCol];
+      if (!raw || !clean) continue;
+      map.set(raw.toString().trim().toUpperCase(), clean.toString().trim());
+    }
+    break;
+  }
+  return map;
+}
+
+// Parse combined month like "JAN, 2025", "Jan 2025", "January 2025", "01/2025", "2025-01"
+// Parse a combined month identifier into {year, month}. Handles many formats produced
+// by Excel and human typists:
+//    "APR, 2025"         "Apr 2025"          "April 2025"
+//    "Apr-24"            "Apr-2024"          "Apr/2024"
+//    "2024-04"           "2024/4"            "04/2024"
+//    "Mar 31, 2024"      "1-Apr-24"          (date-like text)
+//    Excel serial / JS Date (timezone-safe via UTC accessors)
+function parseCombinedMonth(raw) {
+  if (raw == null) return null;
+  // Convert a possibly-2-digit year to a 4-digit year (00–69 → 20xx, 70–99 → 19xx)
+  const expandYr = (y) => {
+    y = +y;
+    if (y < 100) return y + (y < 70 ? 2000 : 1900);
+    return y;
+  };
+  if (raw instanceof Date && !isNaN(raw)) {
+    // Use UTC accessors so the result doesn't depend on the browser's local timezone.
+    return { year: raw.getUTCFullYear(), month: raw.getUTCMonth() + 1 };
+  }
+  const s = raw.toString().trim();
+  if (!s) return null;
+  let m;
+  // "Apr 2024" / "APR, 2025" / "April 2024" / "Apr-24" / "Apr-2024"  → MMM (sep) YYYY-or-YY
+  if ((m = s.match(/^([A-Za-z]{3,9})[\s,\-\/]+(\d{2}|\d{4})$/))) {
+    const idx = MONTHS_SHORT.findIndex(x => x.toLowerCase() === m[1].toLowerCase().slice(0,3));
+    if (idx >= 0) return { year: expandYr(m[2]), month: idx+1 };
+  }
+  // "2024 APR" / "2024-Apr"  → YYYY (sep) MMM
+  if ((m = s.match(/^(\d{4})[\s,\-\/]+([A-Za-z]{3,9})$/))) {
+    const idx = MONTHS_SHORT.findIndex(x => x.toLowerCase() === m[2].toLowerCase().slice(0,3));
+    if (idx >= 0) return { year: +m[1], month: idx+1 };
+  }
+  // "01/04/2024" / "1-4-24" / "1.4.2024"  → DD/MM/YYYY (Indian default, day-first).
+  // We always treat the FIRST number as the day, since the user confirmed the source
+  // data stores each month as the 1st of that month.
+  if ((m = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2}|\d{4})$/))) {
+    const d = +m[1], mn = +m[2];
+    if (d >= 1 && d <= 31 && mn >= 1 && mn <= 12) {
+      return { year: expandYr(m[3]), month: mn };
+    }
+  }
+  // "4-2024" / "04/2024"  → M (sep) YYYY
+  if ((m = s.match(/^(\d{1,2})[\/\-\s](\d{4})$/))) return { year: +m[2], month: +m[1] };
+  // "4-24"  → M-YY  (only when both look like dates, not a year/year)
+  if ((m = s.match(/^(\d{1,2})[\/\-\s](\d{2})$/))) {
+    const mn = +m[1];
+    if (mn >= 1 && mn <= 12) return { year: expandYr(m[2]), month: mn };
+  }
+  // "2024-4" / "2024/04"  → YYYY (sep) M
+  if ((m = s.match(/^(\d{4})[\/\-\s](\d{1,2})$/))) return { year: +m[1], month: +m[2] };
+  // "1-Apr-24" / "1 Apr 2024" / "30 April, 2025"  → D MMM YY[YY]
+  if ((m = s.match(/^\d{1,2}[\s,\-\/]+([A-Za-z]{3,9})[\s,\-\/]+(\d{2}|\d{4})$/))) {
+    const idx = MONTHS_SHORT.findIndex(x => x.toLowerCase() === m[1].toLowerCase().slice(0,3));
+    if (idx >= 0) return { year: expandYr(m[2]), month: idx+1 };
+  }
+  // "Apr 1, 2024" / "April 30 2025"  → MMM D[,] YYYY
+  if ((m = s.match(/^([A-Za-z]{3,9})[\s,\-\/]+\d{1,2}[\s,\-\/]+(\d{2}|\d{4})$/))) {
+    const idx = MONTHS_SHORT.findIndex(x => x.toLowerCase() === m[1].toLowerCase().slice(0,3));
+    if (idx >= 0) return { year: expandYr(m[2]), month: idx+1 };
+  }
+  // Last resort: let the browser parse it.  Use UTC components from the result.
+  const d = new Date(s);
+  if (!isNaN(d)) return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1 };
+  return null;
+}
+
+function meltWideRows(rows, spec, oemMap) {
+  const out = [];
+  const hasMap = oemMap && oemMap.size > 0;
+  for (const r of rows) {
+    const parsed = parseCombinedMonth(r[spec.monthCol]);
+    if (!parsed || !parsed.year || !parsed.month) continue;
+    const state = normalizeState(r[spec.stateCol] || 'Unknown');
+    const rawOemCell = r[spec.makerCol];
+    const rawOem = rawOemCell ? rawOemCell.toString().trim() : '';
+    let oem;
+    if (hasMap) {
+      oem = oemMap.get(rawOem.toUpperCase()) || 'Others';
+    } else {
+      oem = rawOem || 'Unknown';
+    }
+    for (const fc of spec.fuelCols) {
+      let v = r[fc];
+      if (v == null || v === '') continue;
+      if (typeof v === 'string') v = v.replace(/[,\s₹]/g, '');
+      v = +v;
+      if (!isFinite(v) || v === 0) continue;
+      const fuelName = fc.toString().trim();
+      const isTotal = /^all\s*fuel$/i.test(fuelName);
+      out.push({
+        year: parsed.year, month: parsed.month,
+        ym: ym(parsed.year, parsed.month),
+        state, oem,
+        fuel: fuelName,
+        isTotal,
+        retail: v
+      });
+    }
+  }
+  return out;
+}
+
+// Column detection: fuzzy match
+function detectColumns(sampleRow) {
+  const keys = Object.keys(sampleRow);
+  const find = (patterns) => {
+    for (const p of patterns) {
+      const m = keys.find(k => p.test(k.toString().trim()));
+      if (m) return m;
+    }
+    return null;
+  };
+  return {
+    year:   find([/^year$/i, /\byear\b/i]),
+    month:  find([/^month$/i, /^month name$/i, /^mon$/i, /\bmonth\b/i]),
+    state:  find([/^state$/i, /^state name$/i, /^rto[\s_]*state$/i, /\bstate\b/i]),
+    oem:    find([/^oem$/i, /^maker$/i, /^manufacturer$/i, /^oem.?maker$/i, /^brand$/i, /\boem\b/i, /\bmaker\b/i]),
+    fuel:   find([/^fuel$/i, /^fuel[\s_]*type$/i, /^category$/i, /\bfuel\b/i]),
+    retail: find([/^retail$/i, /^retails$/i, /^retail[\s_]*sales$/i, /^sales$/i, /^volume$/i, /^units$/i, /\bretail\b/i, /\bsales\b/i, /\bvolume\b/i, /\bunits\b/i]),
+  };
+}
+
+// ============ FILE HANDLING ============
+const fileInput = document.getElementById('fileInput');
+const dropzone = document.getElementById('dropzone');
+document.getElementById('uploadBtn2').addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', e => { e.preventDefault(); dropzone.classList.remove('dragover'); if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', e => { if (e.target.files.length) handleFile(e.target.files[0]); });
+
+// ----- Auto-load bundled data ---------------------------------------------------
+// When this dashboard is hosted (e.g. GitHub Pages), it will try to fetch a file
+// named `data/state_retail_data.xlsx` sitting next to the HTML. If that exists, it
+// loads automatically — viewers never see the upload UI. If the fetch fails
+// (404 / file system access from disk / etc), we fall back to the manual upload dropzone.
+async function tryAutoLoadBundledData() {
+  try {
+    // Cache-busting query string + no-store: ensures the latest version is fetched
+    // every time the page is opened, so simply replacing the file in the repo gives
+    // viewers fresh data on their next refresh.
+    const url = 'data/state_retail_data.xlsx?t=' + Date.now();
+    const resp = await fetch(url, { cache: 'no-store' });
+    if (!resp.ok) throw new Error('Bundled data not available (HTTP ' + resp.status + ')');
+    const blob = await resp.blob();
+    if (!blob || blob.size < 1024) throw new Error('Bundled data file looks empty');
+    const file = new File([blob], 'state_retail_data.xlsx', { type: blob.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    handleFile(file);
+  } catch (e) {
+    // Silent fallback — the manual dropzone is already visible. Logged for debugging only.
+    console.log('Auto-load skipped:', e.message);
+  }
+}
+window.addEventListener('DOMContentLoaded', tryAutoLoadBundledData);
+
+let currentWorkbook = null;
+
+function readSheetRows(sheetName, headerRow) {
+  // headerRow is 1-based. sheet_to_json with `range` skips the first (headerRow-1) rows,
+  // so the row at index (headerRow-1) becomes the header row.
+  const sheet = currentWorkbook.Sheets[sheetName];
+  if (!sheet) return [];
+  // raw:false makes dates come through as the cell's formatted text (e.g. "Apr-24"),
+  // which parseCombinedMonth understands and which avoids timezone drift from
+  // SheetJS's default Date-object conversion.
+  const opts = { defval: null, raw: false };
+  if (headerRow && headerRow > 1) opts.range = headerRow - 1;
+  return XLSX.utils.sheet_to_json(sheet, opts);
+}
+
+function handleFile(file) {
+  document.getElementById('filenameDisplay').textContent = 'Loaded: ' + file.name;
+  document.getElementById('colDetect').textContent = 'Parsing…';
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      currentWorkbook = XLSX.read(data, { type: 'array', cellDates: true });
+      // Read OEM clean-name mapping from Settings sheet (if present)
+      const oemMap = readOemMapping(currentWorkbook);
+      // Try each sheet. First try LONG format; if none works, try WIDE format.
+      let bestLong = { rows: [], sheet: null, cols: null };
+      let bestWide = { rows: [], sheet: null, spec: null };
+      for (const sn of currentWorkbook.SheetNames) {
+        if (/^settings?$/i.test(sn.trim())) continue; // skip the mapping sheet
+        const rows = XLSX.utils.sheet_to_json(currentWorkbook.Sheets[sn], { defval: null, raw: false });
+        if (!rows.length) continue;
+        const cols = detectColumns(rows[0]);
+        const hasLong = cols.year && cols.month && cols.state && cols.retail;
+        if (hasLong && rows.length > bestLong.rows.length) {
+          bestLong = { rows, sheet: sn, cols };
+        }
+        const spec = detectWideFormat(rows[0]);
+        if (spec && rows.length > bestWide.rows.length) {
+          bestWide = { rows, sheet: sn, spec };
+        }
+      }
+      if (bestLong.rows.length) {
+        ingest(bestLong.rows, bestLong.cols, bestLong.sheet);
+        return;
+      }
+      if (bestWide.rows.length) {
+        const melted = meltWideRows(bestWide.rows, bestWide.spec, oemMap);
+        if (melted.length) {
+          const cols = { year: 'year', month: 'month', state: 'state', oem: 'oem', fuel: 'fuel', retail: 'retail' };
+          const fuelDesc = bestWide.spec.mode === 'derived'
+            ? bestWide.spec.fuelCols.join('/')
+            : bestWide.spec.fuelCols.length + ' fuels';
+          const mapMsg = oemMap.size ? ' · ' + oemMap.size + ' OEM mappings applied' : '';
+          ingest(melted, cols, bestWide.sheet + ' (' + fuelDesc + ')' + mapMsg);
+          return;
+        }
+        document.getElementById('colDetect').textContent = 'Detected wide format on "' + bestWide.sheet + '" but could not parse any rows. Check that the Month column has values like "JAN, 2025" and that fuel columns contain numbers.';
+        showMapper();
+        return;
+      }
+      // Auto-detect failed — offer manual mapping UI
+      document.getElementById('colDetect').textContent = 'Could not auto-detect columns. Map them manually below ↓';
+      showMapper();
+    } catch (err) {
+      console.error(err);
+      toast('Could not read file: ' + err.message, true);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function showMapper() {
+  const card = document.getElementById('mapperCard');
+  const sheetSel = document.getElementById('m_sheet');
+  sheetSel.innerHTML = currentWorkbook.SheetNames.map(n => `<option>${n}</option>`).join('');
+  // Pick biggest sheet as default
+  let biggest = currentWorkbook.SheetNames[0], bigCount = 0;
+  for (const sn of currentWorkbook.SheetNames) {
+    const ref = currentWorkbook.Sheets[sn]['!ref'] || '';
+    const count = ref.length;
+    if (count > bigCount) { bigCount = count; biggest = sn; }
+  }
+  sheetSel.value = biggest;
+  document.getElementById('m_headerRow').value = 1;
+  card.classList.remove('hidden');
+  refreshMapper();
+}
+
+function refreshMapper() {
+  const sheetName = document.getElementById('m_sheet').value;
+  const headerRow = Math.max(1, parseInt(document.getElementById('m_headerRow').value, 10) || 1);
+  const rows = readSheetRows(sheetName, headerRow);
+  if (!rows.length) {
+    document.getElementById('mapperPreview').innerHTML = '<div class="no-data">No rows found on this sheet with that header row.</div>';
+    document.getElementById('mapperHint').textContent = '';
+    return;
+  }
+  const columns = Object.keys(rows[0]);
+  const cols = detectColumns(rows[0]);
+  const targets = ['year','month','state','retail','oem','fuel'];
+  for (const t of targets) {
+    const sel = document.getElementById('m_' + t);
+    const optional = (t === 'oem' || t === 'fuel');
+    sel.innerHTML = (optional ? '<option value="">(none)</option>' : '') +
+      columns.map(c => `<option value="${c}">${c}</option>`).join('');
+    if (cols[t]) sel.value = cols[t];
+  }
+  // Preview first 5 rows
+  const preview = rows.slice(0, 5);
+  const hdr = '<tr>' + columns.map(c => `<th style="padding:6px 10px; background:#F1F3F5; font-size:11px; text-align:left; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; white-space:nowrap;">${c}</th>`).join('') + '</tr>';
+  const body = preview.map(r => '<tr>' + columns.map(c => {
+    let v = r[c];
+    if (v instanceof Date) v = v.toISOString().slice(0,10);
+    if (v == null) v = '';
+    return `<td style="padding:6px 10px; border-top:1px solid var(--border); font-size:12px; white-space:nowrap;">${v}</td>`;
+  }).join('') + '</tr>').join('');
+  document.getElementById('mapperPreview').innerHTML = `<table style="border-collapse:collapse; width:max-content; min-width:100%;">${hdr}${body}</table>`;
+  document.getElementById('mapperHint').textContent = `Sheet has ${rows.length.toLocaleString()} rows, ${columns.length} columns.`;
+}
+
+['m_sheet','m_headerRow'].forEach(id => {
+  document.getElementById(id).addEventListener('change', refreshMapper);
+  document.getElementById(id).addEventListener('input', refreshMapper);
+});
+document.getElementById('mapperLoadBtn').addEventListener('click', () => {
+  const sheetName = document.getElementById('m_sheet').value;
+  const headerRow = Math.max(1, parseInt(document.getElementById('m_headerRow').value, 10) || 1);
+  const rows = readSheetRows(sheetName, headerRow);
+  const pick = id => document.getElementById(id).value || null;
+  const cols = { year: pick('m_year'), month: pick('m_month'), state: pick('m_state'), retail: pick('m_retail'), oem: pick('m_oem'), fuel: pick('m_fuel') };
+  if (!cols.year || !cols.month || !cols.state || !cols.retail) {
+    toast('Please pick Year, Month, State, and Retail columns.', true);
+    return;
+  }
+  document.getElementById('mapperCard').classList.add('hidden');
+  ingest(rows, cols, sheetName);
+});
+document.getElementById('mapperWideBtn').addEventListener('click', () => {
+  const sheetName = document.getElementById('m_sheet').value;
+  const headerRow = Math.max(1, parseInt(document.getElementById('m_headerRow').value, 10) || 1);
+  const rows = readSheetRows(sheetName, headerRow);
+  if (!rows.length) { toast('No rows on this sheet.', true); return; }
+  const spec = detectWideFormat(rows[0]);
+  if (!spec) {
+    toast('Could not detect Month / State / Maker + fuel columns on this sheet. Check the header row.', true);
+    return;
+  }
+  const oemMap = readOemMapping(currentWorkbook);
+  const melted = meltWideRows(rows, spec, oemMap);
+  if (!melted.length) {
+    toast('Parsed 0 rows from wide format. Check that Month values look like "JAN, 2025" and numeric cells are numbers.', true);
+    return;
+  }
+  const cols = { year: 'year', month: 'month', state: 'state', oem: 'oem', fuel: 'fuel', retail: 'retail' };
+  document.getElementById('mapperCard').classList.add('hidden');
+  const fuelDesc = spec.mode === 'derived' ? spec.fuelCols.join('/') : spec.fuelCols.length + ' fuels';
+  const mapMsg = oemMap.size ? ' · ' + oemMap.size + ' OEM mappings applied' : '';
+  ingest(melted, cols, sheetName + ' (' + fuelDesc + ')' + mapMsg);
+});
+
+function ingest(rows, cols, sheetName) {
+  detectedCols = cols;
+  const cleaned = [];
+  for (const r of rows) {
+    const yRaw = r[cols.year];
+    const mRaw = r[cols.month];
+    const year = yRaw ? parseInt(yRaw, 10) : null;
+    const month = parseMonth(mRaw);
+    if (!year || !month) continue;
+    let retailRaw = r[cols.retail];
+    if (typeof retailRaw === 'string') retailRaw = retailRaw.replace(/[,\s₹]/g, '');
+    const retail = +retailRaw;
+    if (!isFinite(retail)) continue;
+    const fuelName = cols.fuel ? (r[cols.fuel] ? r[cols.fuel].toString().trim() : 'Unknown') : 'All';
+    cleaned.push({
+      year, month,
+      ym: ym(year, month),
+      state: normalizeState(r[cols.state] || 'Unknown'),
+      oem: cols.oem ? (r[cols.oem] ? r[cols.oem].toString().trim() : 'Unknown') : 'All',
+      fuel: fuelName,
+      // Carry through isTotal flag if pre-melted; else infer from name "ALL FUEL"
+      isTotal: r.isTotal === true || /^all\s*fuel$/i.test(fuelName),
+      retail
+    });
+  }
+  if (!cleaned.length) {
+    toast('Parsed 0 valid rows. Check Year, Month, and Retail values in your file.', true);
+    document.getElementById('colDetect').textContent = `Picked: Year=${cols.year}, Month=${cols.month}, State=${cols.state}, Retail=${cols.retail}. But 0 rows had valid Year+Month+Retail. Try the "Map columns" UI.`;
+    showMapper();
+    return;
+  }
+  rawData = cleaned;
+  // Hide the dropzone entirely after a successful load — the "Change file" button in
+  // the header replaces the inline re-upload control.
+  const dz = document.getElementById('dropzone');
+  dz.style.display = 'none';
+  // Stamp "Data last updated" in the header from the latest YM in the data.
+  const latestYm = cleaned.reduce((acc, r) => (r.ym > acc ? r.ym : acc), '');
+  const stamp = document.getElementById('dataUpdated');
+  if (stamp) {
+    if (latestYm) {
+      const [y, m] = latestYm.split('-').map(Number);
+      stamp.textContent = MONTHS_FULL[m-1] + ' ' + y;
+    } else {
+      stamp.textContent = '—';
+    }
+  }
+  document.getElementById('filtersBar').classList.remove('hidden');
+  toast('Loaded ' + cleaned.length.toLocaleString() + ' rows');
+  populateFilters();
+  mountChartSlicers();
+  applyFilters();
+  setupGlobalLabelsToggle();
+}
+
+// Mount per-chart slicers. Each slicer re-renders its parent chart on change.
+function mountChartSlicers() {
+  const uniq = (k) => [...new Set(rawData.map(r => r[k]).filter(Boolean))].sort();
+  const states = uniq('state');
+  const oems   = uniq('oem').sort((a,b) => {
+    if (a === 'Others') return 1;
+    if (b === 'Others') return -1;
+    return a.localeCompare(b);
+  });
+
+  const mountSlicer = (containerId, valuesKey, slicerKey, chartKey, noun) => {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    const values = valuesKey === 'state' ? states : oems;
+    mountCheckboxDropdown({
+      container: el, values, noun, search: true,
+      get: () => chartSlicers[chartKey][slicerKey],
+      set: (v) => { chartSlicers[chartKey][slicerKey] = v; },
+      onChange: () => renderCurrentPage()
+    });
+  };
+
+  mountSlicer('slicer_topStates_oem',     'oem',   'oem',   'topStates',     'OEMs');
+  mountSlicer('slicer_topOems_state',     'state', 'state', 'topOems',       'states');
+  mountSlicer('slicer_fuelStacked_state', 'state', 'state', 'fuelStacked',   'states');
+  mountSlicer('slicer_fuelStacked_oem',   'oem',   'oem',   'fuelStacked',   'OEMs');
+  mountSlicer('slicer_evIceTime_state',   'state', 'state', 'evIceTime',     'states');
+  mountSlicer('slicer_oemShareTrend_state','state','state', 'oemShareTrend', 'states');
+  mountSlicer('slicer_oemCompare_state',  'state', 'state', 'oemCompare',    'states');
+  mountSlicer('slicer_stateFuel_state',   'state', 'state', 'stateFuel',     'states');
+
+  // Boolean toggle: include the Pan India aggregate row in State Retail Trend?
+  const panBtn = document.getElementById('btn_stateTrend_panIndia');
+  if (panBtn && !panBtn.dataset.bound) {
+    panBtn.dataset.bound = '1';
+    panBtn.addEventListener('click', () => {
+      chartSlicers.stateTrend.panIndia = !chartSlicers.stateTrend.panIndia;
+      panBtn.classList.toggle('active', chartSlicers.stateTrend.panIndia);
+      panBtn.textContent = chartSlicers.stateTrend.panIndia ? 'Hide Pan India' : 'Show Pan India';
+      renderCurrentPage();
+    });
+  }
+}
+
+// Apply a chart-local slicer to a row set.
+// e.g. applySlicer(filteredTotals, chartSlicers.topStates).
+function applySlicer(rows, sl) {
+  if (!sl) return rows;
+  return rows.filter(r =>
+    (!sl.state || !sl.state.length || sl.state.includes(r.state)) &&
+    (!sl.oem   || !sl.oem.length   || sl.oem.includes(r.oem))   &&
+    (!sl.fuel  || !sl.fuel.length  || sl.fuel.includes(r.fuel))
+  );
+}
+
+// Map of filter handles (one per checkbox-dropdown) — used so we can call .refresh()
+// from outside (e.g. when year selection changes the available months).
+const filterHandles = {};
+
+// Generic checkbox-dropdown widget.
+//  • container: the element to render into
+//  • values:    array of option values (numbers or strings)
+//  • format:    optional value -> display text
+//  • noun:      noun used in summary text ("states", "OEMs", etc)
+//  • get:       () -> array of currently-selected values (as strings)
+//  • set:       (newSelected[]) -> store the new selection
+//  • onChange:  fired after selection changes
+//  • search:    boolean — if true and values.length > 8, show a search box
+// Returns { refresh(newValues), syncFromState() }.
+function mountCheckboxDropdown(opts) {
+  const { container, values, format, noun, get, set, onChange, search } = opts;
+  container.classList.add('cb-dd');
+  let allValues = values.slice();
+
+  const render = () => {
+    const useSearch = search && allValues.length > 8;
+    container.innerHTML = `
+      <button type="button" class="cb-dd-btn">
+        <span class="cb-dd-summary">All ${noun}</span>
+        <span class="cb-dd-caret">▾</span>
+      </button>
+      <div class="cb-dd-panel hidden">
+        ${useSearch ? '<input type="text" class="cb-dd-search" placeholder="Search…" />' : ''}
+        <label class="cb-dd-all"><input type="checkbox" data-all checked /> All ${noun}</label>
+        <div class="cb-dd-divider"></div>
+        <div class="cb-dd-list">
+          ${allValues.map(v => `<label data-val="${String(v).replace(/"/g,'&quot;')}"><input type="checkbox" value="${String(v).replace(/"/g,'&quot;')}" /> ${format ? format(v) : v}</label>`).join('')}
+        </div>
+      </div>`;
+
+    const btn   = container.querySelector('.cb-dd-btn');
+    const panel = container.querySelector('.cb-dd-panel');
+    const allCb = container.querySelector('input[data-all]');
+    const summaryEl = container.querySelector('.cb-dd-summary');
+    const itemCbs = () => [...container.querySelectorAll('.cb-dd-list input[type=checkbox]')];
+
+    const updateSummary = () => {
+      const sel = get();
+      if (!sel.length) summaryEl.textContent = `All ${noun}`;
+      else if (sel.length <= 2) summaryEl.textContent = sel.map(v => format ? format(v) : v).join(', ');
+      else summaryEl.textContent = `${sel.length} ${noun} selected`;
+    };
+
+    const sync = () => {
+      const selSet = new Set(get().map(String));
+      itemCbs().forEach(cb => cb.checked = selSet.has(cb.value));
+      allCb.checked = selSet.size === 0;
+      updateSummary();
+    };
+
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.querySelectorAll('.cb-dd.open').forEach(d => { if (d !== container) d.classList.remove('open'); });
+      document.querySelectorAll('.cb-dd-panel').forEach(p => { if (p !== panel) p.classList.add('hidden'); });
+      panel.classList.toggle('hidden');
+      container.classList.toggle('open');
+    });
+    panel.addEventListener('click', e => e.stopPropagation());
+    panel.addEventListener('mousedown', e => e.stopPropagation());
+
+    allCb.addEventListener('change', () => {
+      // 'All' clears any individual selection (empty array = all in our semantics).
+      itemCbs().forEach(cb => cb.checked = false);
+      set([]);
+      updateSummary();
+      onChange();
+    });
+
+    container.addEventListener('change', (e) => {
+      if (!e.target.matches('.cb-dd-list input[type=checkbox]')) return;
+      const sel = itemCbs().filter(x => x.checked).map(x => x.value);
+      allCb.checked = sel.length === 0;
+      set(sel);
+      updateSummary();
+      onChange();
+    });
+
+    if (useSearch) {
+      const sb = container.querySelector('.cb-dd-search');
+      sb.addEventListener('input', () => {
+        const q = sb.value.toLowerCase();
+        container.querySelectorAll('.cb-dd-list label').forEach(lab => {
+          lab.style.display = lab.textContent.toLowerCase().includes(q) ? '' : 'none';
+        });
+      });
+      sb.addEventListener('click', e => e.stopPropagation());
+    }
+
+    sync();
+    return { sync };
+  };
+
+  let bound = render();
+  return {
+    syncFromState: () => bound.sync(),
+    refresh: (newValues) => { allValues = newValues.slice(); bound = render(); }
+  };
+}
+
+// Single document-click handler closes any open dropdowns
+document.addEventListener('click', () => {
+  document.querySelectorAll('.cb-dd.open').forEach(d => d.classList.remove('open'));
+  document.querySelectorAll('.cb-dd-panel').forEach(p => p.classList.add('hidden'));
+});
+
+function populateFilters() {
+  const uniq = (k) => [...new Set(rawData.map(r => r[k]).filter(Boolean))].sort();
+  const years = uniq('year');
+  const states = uniq('state');
+  // Sort OEMs but always put "Others" last for readability
+  const oems = uniq('oem').sort((a, b) => {
+    if (a === 'Others') return 1;
+    if (b === 'Others') return -1;
+    return a.localeCompare(b);
+  });
+  // Exclude meta categories like "ALL FUEL" — those are row totals, not user-facing fuel choices
+  const fuels = [...new Set(rawData.filter(r => !r.isTotal).map(r => r.fuel).filter(Boolean))].sort();
+
+  const onAnyChange = () => applyFilters();
+
+  // ----- From / To Y-M range pickers (native single-select) -----
+  // All available YMs in the data, oldest → newest. e.g. "2025-01", "2025-02", …
+  const allYMs = [...new Set(rawData.map(r => r.ym))].sort();
+  dataLatestYm = allYMs.length ? allYMs[allYMs.length - 1] : '';
+  const fromEl = document.getElementById('f_fromYm');
+  const toEl   = document.getElementById('f_toYm');
+  // From: leading "All months" sentinel + every YM
+  fromEl.innerHTML = '<option value="">All months</option>'
+    + allYMs.map(ym => `<option value="${ym}">${prettyYM(ym)}</option>`).join('');
+  // To: every YM, defaults to the latest
+  toEl.innerHTML = allYMs.map(ym => `<option value="${ym}">${prettyYM(ym)}</option>`).join('');
+  if (allYMs.length) toEl.value = allYMs[allYMs.length - 1];
+  // Seed state — keep whatever the user picked last; otherwise empty fromYm & latest toYm
+  filters.toYm = filters.toYm || (allYMs.length ? allYMs[allYMs.length - 1] : '');
+  fromEl.value = filters.fromYm;
+  toEl.value   = filters.toYm;
+
+  // Guard against From > To by silently clamping (UI feels intuitive that way)
+  const onTemporalChange = () => {
+    let f = fromEl.value;
+    let t = toEl.value;
+    if (f && t && f > t) {
+      // User picked a From later than To — bump To to match From
+      t = f;
+      toEl.value = t;
+    }
+    filters.fromYm = f;
+    filters.toYm   = t;
+    applyFilters();
+  };
+  fromEl.addEventListener('change', onTemporalChange);
+  toEl.addEventListener('change',   onTemporalChange);
+
+  filterHandles.state = mountCheckboxDropdown({
+    container: document.getElementById('f_state'), values: states, noun: 'states', search: true,
+    get: () => filters.state, set: (v) => { filters.state = v; }, onChange: onAnyChange
+  });
+  filterHandles.oem = mountCheckboxDropdown({
+    container: document.getElementById('f_oem'), values: oems, noun: 'OEMs', search: true,
+    get: () => filters.oem, set: (v) => { filters.oem = v; }, onChange: onAnyChange
+  });
+  filterHandles.fuel = mountCheckboxDropdown({
+    container: document.getElementById('f_fuel'), values: fuels, noun: 'fuels',
+    get: () => filters.fuel, set: (v) => { filters.fuel = v; }, onChange: onAnyChange
+  });
+
+  document.getElementById('resetBtn').onclick = () => {
+    filters.fromYm = '';
+    filters.toYm   = allYMs.length ? allYMs[allYMs.length - 1] : '';
+    filters.state = []; filters.oem = []; filters.fuel = [];
+    fromEl.value = '';
+    toEl.value   = filters.toYm;
+    Object.values(filterHandles).forEach(h => h && h.syncFromState());
+    applyFilters();
+  };
+}
+
+// Inclusive range check: row passes when fromYm <= r.ym <= toYm.
+// Empty fromYm = no lower bound (all months from the start of data).
+// Empty toYm  = no upper bound (all months to the end of data).
+function passesYearMonth(r) {
+  if (filters.fromYm && r.ym < filters.fromYm) return false;
+  if (filters.toYm   && r.ym > filters.toYm)   return false;
+  return true;
+}
+
+// Membership helpers for the other (non-temporal) filter axes.
+function passesState(r) { return !filters.state.length || filters.state.includes(r.state); }
+function passesOem(r)   { return !filters.oem.length   || filters.oem.includes(r.oem); }
+function passesFuel(r)  { return !filters.fuel.length  || filters.fuel.includes(r.fuel); }
+
+// Composite filter with optional flags to skip individual axes.
+// Used by metrics/charts that want to ignore some user filters (e.g. EV%
+// must ignore the fuel filter, MoM/YoY ignore the year/month filters, etc).
+function filterRows(opts = {}) {
+  return rawData.filter(r => {
+    if (!opts.skipTime  && !passesYearMonth(r)) return false;
+    if (!opts.skipState && !passesState(r))    return false;
+    if (!opts.skipOem   && !passesOem(r))      return false;
+    if (!opts.skipFuel  && !passesFuel(r))     return false;
+    return true;
+  });
+}
+
+function applyFilters() {
+  const base = filterRows();
+  const hasTotalTag = rawData.some(r => r.isTotal);
+  if (filters.fuel.length) {
+    // User picked specific fuel(s) → don't double-bucket
+    filteredData = base;
+    filteredTotals = base;
+  } else if (hasTotalTag) {
+    filteredData = base.filter(r => !r.isTotal);
+    filteredTotals = base.filter(r => r.isTotal);
+  } else {
+    filteredData = base;
+    filteredTotals = base;
+  }
+  renderCurrentPage();
+}
+
+// ============ AGGREGATION HELPERS ============
+function aggBy(rows, keyFn) {
+  const out = new Map();
+  for (const r of rows) {
+    const k = keyFn(r);
+    out.set(k, (out.get(k) || 0) + r.retail);
+  }
+  return out;
+}
+function sortedMapEntries(m, dir='desc') {
+  const arr = [...m.entries()];
+  arr.sort((a,b) => dir==='asc' ? a[1]-b[1] : b[1]-a[1]);
+  return arr;
+}
+function allMonthKeys(rows) {
+  const set = new Set(rows.map(r => r.ym));
+  return [...set].sort();
+}
+
+// ============ TABS ============
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+  t.classList.add('active');
+  currentPage = +t.dataset.page;
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page' + currentPage).classList.add('active');
+  renderCurrentPage();
+}));
+
+function renderCurrentPage() {
+  if (!rawData.length) return;
+  // Destroy all charts to avoid memory bloat on tab switches
+  Object.keys(charts).forEach(destroyChart);
+  if (currentPage === 1) renderPage1();
+  else if (currentPage === 2) renderPage2();
+  else if (currentPage === 3) renderPage3();
+  else if (currentPage === 4) renderPage4();
+  updateAllChips();
+}
+
+// ----- "Showing: …" filter-summary chip per chart card -----
+// Builds a short human-readable line describing what the chart is reflecting,
+// based on the global filter bar + any chart-local slicer.
+function summarizeOne(label, arr, formatter) {
+  if (!arr || !arr.length) return null;
+  if (arr.length === 1) return label + ': ' + (formatter ? formatter(arr[0]) : arr[0]);
+  return label + ': ' + arr.length + ' selected';
+}
+function activeFilterText(localSlicer) {
+  const parts = [];
+  // (Period info is intentionally omitted — the From / To selectors are always visible
+  // in the sticky filter bar, so repeating them on every chart adds noise.)
+  const stateBit = summarizeOne('State', filters.state);
+  const oemBit   = summarizeOne('OEM',   filters.oem);
+  const fuelBit  = summarizeOne('Fuel',  filters.fuel);
+  if (stateBit) parts.push(stateBit);
+  if (oemBit)   parts.push(oemBit);
+  if (fuelBit)  parts.push(fuelBit);
+  if (localSlicer) {
+    if (localSlicer.state && localSlicer.state.length)
+      parts.push('Chart state: ' + (localSlicer.state.length === 1 ? localSlicer.state[0] : localSlicer.state.length + ' selected'));
+    if (localSlicer.oem && localSlicer.oem.length)
+      parts.push('Chart OEM: '   + (localSlicer.oem.length   === 1 ? localSlicer.oem[0]   : localSlicer.oem.length   + ' selected'));
+    if (localSlicer.fuel && localSlicer.fuel.length)
+      parts.push('Chart fuel: '  + (localSlicer.fuel.length  === 1 ? localSlicer.fuel[0]  : localSlicer.fuel.length  + ' selected'));
+  }
+  // Return null when nothing is filtered — caller should hide the chip in that case.
+  return parts.length ? 'Showing: ' + parts.join(' · ') : null;
+}
+function updateChip(chartKey, cardEl) {
+  if (!cardEl) {
+    const canvas = document.getElementById('c_' + chartKey);
+    cardEl = canvas ? canvas.closest('.card') : null;
+  }
+  if (!cardEl) return;
+  let chip = cardEl.querySelector('.card-filterchip');
+  const text = activeFilterText(chartSlicers[chartKey]);
+  if (!text) {
+    // No filters in effect — hide / remove the chip so the card stays clean
+    if (chip) chip.remove();
+    return;
+  }
+  if (!chip) {
+    chip = document.createElement('div');
+    chip.className = 'card-filterchip';
+    const header = cardEl.querySelector('.card-header');
+    if (header) header.insertAdjacentElement('afterend', chip);
+    else cardEl.prepend(chip);
+  }
+  chip.innerHTML = text;
+}
+function updateAllChips() {
+  document.querySelectorAll('.card').forEach(card => {
+    const canvas = card.querySelector('canvas');
+    if (canvas) {
+      const key = canvas.id.replace(/^c_/, '');
+      updateChip(key, card);
+    } else if (card.querySelector('#matrixWrap')) {
+      // Matrix table card — no chart key needed
+      const text = activeFilterText(null);
+      let chip = card.querySelector('.card-filterchip');
+      if (!text) { if (chip) chip.remove(); return; }
+      if (!chip) {
+        chip = document.createElement('div');
+        chip.className = 'card-filterchip';
+        const header = card.querySelector('.matrix-controls');
+        if (header) header.insertAdjacentElement('beforebegin', chip);
+        else card.prepend(chip);
+      }
+      chip.innerHTML = text;
+    }
+  });
+}
+
+// ============ PAGE 1: OVERVIEW ============
+function renderPage1() {
+  renderKPIs();
+  renderRetailTrend();
+  renderEvTrend();
+  renderIndiaMap();
+  renderEvIceTime();
+  renderTopStates();
+  renderTopOems();
+  renderEvByState();
+  renderFuelStacked();
+}
+
+function renderKPIs() {
+  const total = filteredTotals.reduce((a,r) => a + r.retail, 0);
+  // MoM & YoY: full time series; ignore year/month filters; respect state/oem/fuel
+  const hasTotalTag = rawData.some(r => r.isTotal);
+  const baseForTrend = filterRows({ skipTime: true })
+    .filter(r => filters.fuel.length || !hasTotalTag || r.isTotal);
+  const byMonth = new Map();
+  for (const r of baseForTrend) byMonth.set(r.ym, (byMonth.get(r.ym)||0) + r.retail);
+  const months = [...byMonth.keys()].sort();
+  const last = months[months.length-1];
+  const prev = months[months.length-2];
+  const mom = (last && prev && byMonth.get(prev)) ? ((byMonth.get(last)-byMonth.get(prev))/byMonth.get(prev))*100 : null;
+  let yoy = null;
+  if (last) {
+    const [y,m] = last.split('-').map(Number);
+    const ly = (y-1)+'-'+String(m).padStart(2,'0');
+    if (byMonth.has(ly)) yoy = ((byMonth.get(last)-byMonth.get(ly))/byMonth.get(ly))*100;
+  }
+  // EV penetration: ev (EV-only rows) over total (ALL FUEL rows). Ignore the fuel filter
+  // for this metric — a "fuel = EV" filter would otherwise force 100%.
+  const evBase = filterRows({ skipFuel: true });
+  const ev = evBase.filter(r => r.fuel.toUpperCase() === 'EV' || isEV(r.fuel)).reduce((a,r)=>a+r.retail,0);
+  const evDenom = hasTotalTag
+    ? evBase.filter(r => r.isTotal).reduce((a,r)=>a+r.retail,0)
+    : evBase.reduce((a,r)=>a+r.retail,0);
+  const evPct = evDenom ? (ev/evDenom)*100 : null;
+  // Top OEM (use totals view to avoid double-count from EV+ICE+CNG)
+  const byOem = aggBy(filteredTotals, r => r.oem);
+  const topOem = sortedMapEntries(byOem)[0] || ['—', 0];
+
+  const kpis = [
+    { label: 'Total Retail', value: fmtCompact(total), sub: fmtNum(total) + ' units' },
+    { label: 'MoM Growth', value: fmtPct(mom), deltaVal: mom, sub: prev ? 'vs ' + prettyYM(prev) : '' },
+    { label: 'YoY Growth', value: fmtPct(yoy), deltaVal: yoy, sub: last ? 'vs same month LY' : '' },
+    { label: 'EV Penetration', value: fmtPct(evPct), sub: fmtCompact(ev) + ' EV units' },
+    { label: 'Top OEM', value: topOem[0], sub: fmtCompact(topOem[1]) + ' units' },
+  ];
+  document.getElementById('kpis').innerHTML = kpis.map(k => {
+    let delta = '';
+    if (k.deltaVal != null) {
+      const cls = k.deltaVal >= 0 ? 'up' : 'down';
+      const arrow = k.deltaVal >= 0 ? '▲' : '▼';
+      delta = `<div class="kpi-delta ${cls}">${arrow} ${Math.abs(k.deltaVal).toFixed(1)}%</div>`;
+    }
+    return `<div class="kpi"><div class="kpi-label">${k.label}</div><div class="kpi-value">${k.value}</div>${k.sub?`<div class="kpi-sub">${k.sub}</div>`:''}${delta}</div>`;
+  }).join('');
+}
+
+function renderRetailTrend() {
+  const byMonth = aggBy(filteredTotals, r => r.ym);
+  const months = [...byMonth.keys()].sort();
+  const labels = months.map(prettyYM);
+  const data = months.map(m => byMonth.get(m));
+  charts.retailTrend = new Chart(document.getElementById('c_retailTrend'), {
+    type: 'line',
+    data: { labels, datasets: [{ label: 'Retail', data, borderColor: '#E63946', backgroundColor: 'rgba(230,57,70,0.1)', fill: true, tension: 0.35, borderWidth: 2.5, pointRadius: 2, pointHoverRadius: 5 }]},
+    options: lineOpts('Units', fmtCompact)
+  });
+}
+
+function renderEvTrend() {
+  // Ignore the fuel filter for this trend — a "fuel = EV" filter would force 100% line.
+  const hasTotalTag = rawData.some(r => r.isTotal);
+  const evBase = filterRows({ skipFuel: true });
+  const byMonthTotal = new Map();
+  const byMonthEV = new Map();
+  for (const r of evBase) {
+    if (hasTotalTag && r.isTotal) {
+      byMonthTotal.set(r.ym, (byMonthTotal.get(r.ym)||0)+r.retail);
+    } else if (!hasTotalTag) {
+      byMonthTotal.set(r.ym, (byMonthTotal.get(r.ym)||0)+r.retail);
+    }
+    if (!r.isTotal && (r.fuel.toUpperCase() === 'EV' || isEV(r.fuel))) {
+      byMonthEV.set(r.ym, (byMonthEV.get(r.ym)||0)+r.retail);
+    }
+  }
+  const months = [...byMonthTotal.keys()].sort();
+  const labels = months.map(prettyYM);
+  const data = months.map(m => byMonthTotal.get(m) ? (byMonthEV.get(m)||0)/byMonthTotal.get(m)*100 : 0);
+  const opts = lineOpts('%', v => v.toFixed(1)+'%');
+  // EV-Penetration-specific: data labels show the percentage with a "%" suffix,
+  // and inherit the line's green colour.
+  opts.plugins = opts.plugins || {};
+  opts.plugins.datalabels = {
+    formatter: v => (typeof v === 'number' ? v.toFixed(1) + '%' : ''),
+    color: ctx => seriesColor(ctx)
+  };
+  charts.evTrend = new Chart(document.getElementById('c_evTrend'), {
+    type: 'line',
+    data: { labels, datasets: [{ label: 'EV %', data, borderColor: '#06A77D', backgroundColor: 'rgba(6,167,125,0.12)', fill: true, tension: 0.35, borderWidth: 2.5, pointRadius: 2, pointHoverRadius: 5 }]},
+    options: opts
+  });
+}
+
+// Mirror of renderTopStates: ranks OEMs (top 15) with a chart-local state slicer
+function renderTopOems() {
+  const rows = applySlicer(filteredTotals, chartSlicers.topOems);
+  const byOem = aggBy(rows, r => r.oem);
+  const entries = sortedMapEntries(byOem).slice(0, 15);
+  const labels = entries.map(e => e[0]);
+  const data = entries.map(e => e[1]);
+  charts.topOems = new Chart(document.getElementById('c_topOems'), {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Retail', data, backgroundColor: '#7209B7', borderRadius: 5 }]},
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => 'Retail: ' + fmtNum(c.parsed.x) } }
+      },
+      scales: { x: { ticks: { callback: fmtCompact, font:{size:10} }, grid:{color:'#F1F3F5'} }, y: { ticks:{font:{size:10}}, grid: { display: false } } }
+    }
+  });
+}
+
+function renderTopStates() {
+  // Chart-local slicer: lets users restrict which OEMs feed into the state totals.
+  // The "Pan India" aggregate row is always excluded — it'd dominate any state ranking.
+  const rows = applySlicer(filteredTotals, chartSlicers.topStates);
+  const byState = aggBy(rows, r => r.state);
+  const entries = sortedMapEntries(byState).filter(([s]) => !isPanIndiaState(s)).slice(0, 15);
+  const labels = entries.map(e => e[0]);
+  const data = entries.map(e => e[1]);
+  charts.topStates = new Chart(document.getElementById('c_topStates'), {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Retail', data, backgroundColor: '#118AB2', borderRadius: 5 }]},
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => 'Retail: ' + fmtNum(c.parsed.x) } } },
+      scales: { x: { ticks: { callback: fmtCompact, font:{size:10} }, grid:{color:'#F1F3F5'} }, y: { ticks:{font:{size:10}}, grid: { display: false } } }
+    }
+  });
+}
+
+// EV vs ICE Trend — 100% stacked monthly fuel shares (uses split rows: EV/ICE/CNG).
+function renderEvIceTime() {
+  const rows = applySlicer(filteredData, chartSlicers.evIceTime);
+  const months = allMonthKeys(rows);
+  const labels = months.map(prettyYM);
+
+  // Per-month sum for each fuel category
+  const sumFor = (m, fuel) => rows
+    .filter(r => r.ym === m && r.fuel.toUpperCase() === fuel)
+    .reduce((a, r) => a + r.retail, 0);
+  const ice = months.map(m => sumFor(m, 'ICE'));
+  const ev  = months.map(m => sumFor(m, 'EV'));
+  const cng = months.map(m => sumFor(m, 'CNG'));
+  const totals = months.map((_, i) => ice[i] + ev[i] + cng[i]);
+  const pct = (arr, i) => totals[i] ? (arr[i] / totals[i]) * 100 : 0;
+
+  const datasets = [
+    { label: 'ICE', backgroundColor: '#6B7280', data: months.map((_, i) => pct(ice, i)), abs: ice, maxBarThickness: 28 },
+    { label: 'EV',  backgroundColor: '#06A77D', data: months.map((_, i) => pct(ev, i)),  abs: ev,  maxBarThickness: 28 },
+    { label: 'CNG', backgroundColor: '#F59E0B', data: months.map((_, i) => pct(cng, i)), abs: cng, maxBarThickness: 28 }
+  ].filter(d => d.abs.some(v => v > 0));
+
+  charts.evIceTime = new Chart(document.getElementById('c_evIceTime'), {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'bottom', labels: { font:{size:11}, usePointStyle: true, padding: 10 } },
+        tooltip: {
+          callbacks: {
+            label: c => {
+              const ds = c.dataset;
+              const abs = ds.abs ? ds.abs[c.dataIndex] : null;
+              return `${ds.label}: ${c.parsed.y.toFixed(1)}%` + (abs != null ? `  (${fmtNum(abs)})` : '');
+            }
+          }
+        },
+        // Labels rendered INSIDE each stacked segment (centred) so the top-most segment
+        // (often ICE around 90%+) doesn't have its label pushed outside the chart.
+        // Small segments still show their value to one decimal; only segments below ~1.5%
+        // are skipped because their text physically won't fit.
+        datalabels: {
+          anchor: 'center', align: 'center', offset: 0,
+          backgroundColor: null,
+          color: ctx => {
+            // White text on dark/coloured segments; dark on bright (CNG amber)
+            const bg = ctx.dataset.backgroundColor;
+            return bg === '#F59E0B' ? '#1A1D23' : 'white';
+          },
+          font: { weight: '700', size: 10 },
+          formatter: v => {
+            if (v == null || v < 1.5) return '';
+            // Whole-number for >= 10, 1-dp for smaller slices so they stay legible
+            return (v >= 10 ? v.toFixed(0) : v.toFixed(1)) + '%';
+          }
+        }
+      },
+      // Give the chart a tiny top padding so any chart legend / axis edge breathes
+      layout: { padding: { top: 6 } },
+      scales: {
+        x: { stacked: true, grid: { display: false }, ticks:{font:{size:10}} },
+        y: { stacked: true, max: 100, ticks: { callback: v => v+'%', font:{size:10} }, grid:{color:'#F1F3F5'} }
+      }
+    }
+  });
+}
+
+// EV Readiness by State — each state's fuel mix as a 100% stacked horizontal bar,
+// sorted by EV share descending. Top 20 states by total retail in the filtered window.
+function renderEvByState() {
+  // Use the split-row view (filteredData) so EV/ICE/CNG counts are clean
+  const rows = filteredData;
+  // Gather totals per state per fuel
+  const states = [...new Set(rows.map(r => r.state))];
+  const byState = states.map(s => {
+    const sr = rows.filter(r => r.state === s);
+    const ice = sr.filter(r => r.fuel.toUpperCase() === 'ICE').reduce((a,r)=>a+r.retail,0);
+    const ev  = sr.filter(r => r.fuel.toUpperCase() === 'EV' ).reduce((a,r)=>a+r.retail,0);
+    const cng = sr.filter(r => r.fuel.toUpperCase() === 'CNG').reduce((a,r)=>a+r.retail,0);
+    const total = ice + ev + cng;
+    return { state: s, ice, ev, cng, total, evPct: total ? (ev/total)*100 : 0 };
+  });
+  // Top 20 states by retail, sorted by EV share desc
+  byState.sort((a,b) => b.total - a.total);
+  const ranked = byState.slice(0, 20).sort((a, b) => b.evPct - a.evPct);
+  const labels = ranked.map(x => x.state);
+  const pct = (arr, key) => arr.map(x => x.total ? (x[key]/x.total)*100 : 0);
+
+  const datasets = [
+    { label: 'ICE', backgroundColor: '#6B7280', data: pct(ranked, 'ice'), abs: ranked.map(x=>x.ice) },
+    { label: 'EV',  backgroundColor: '#06A77D', data: pct(ranked, 'ev'),  abs: ranked.map(x=>x.ev)  },
+    { label: 'CNG', backgroundColor: '#F59E0B', data: pct(ranked, 'cng'), abs: ranked.map(x=>x.cng) }
+  ].filter(d => d.abs.some(v => v > 0));
+
+  charts.evByState = new Chart(document.getElementById('c_evByState'), {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'bottom', labels: { font:{size:11}, usePointStyle: true, padding: 10 } },
+        tooltip: {
+          callbacks: {
+            label: c => {
+              const ds = c.dataset;
+              const abs = ds.abs ? ds.abs[c.dataIndex] : null;
+              return `${ds.label}: ${c.parsed.x.toFixed(1)}%` + (abs != null ? `  (${fmtNum(abs)})` : '');
+            }
+          }
+        },
+        // Labels INSIDE each segment so they never get clipped off the chart edge
+        datalabels: {
+          anchor: 'center', align: 'center', offset: 0,
+          backgroundColor: null,
+          color: ctx => (ctx.dataset.backgroundColor === '#F59E0B' ? '#1A1D23' : 'white'),
+          font: { weight: '700', size: 11 },
+          formatter: v => v >= 5 ? v.toFixed(0) + '%' : ''
+        }
+      },
+      scales: {
+        x: { stacked: true, max: 100, ticks: { callback: v => v+'%', font:{size:10} }, grid:{color:'#F1F3F5'} },
+        y: { stacked: true, ticks:{font:{size:10}}, grid: { display: false } }
+      }
+    }
+  });
+}
+
+function renderOemTreemap() {
+  const byOem = aggBy(filteredTotals, r => r.oem);
+  const tree = [...byOem.entries()].map(([k,v]) => ({ brand: k, retail: v })).filter(x => x.retail > 0);
+  const total = tree.reduce((a,x)=>a+x.retail,0);
+  charts.oemTreemap = new Chart(document.getElementById('c_oemTreemap'), {
+    type: 'treemap',
+    data: { datasets: [{
+      tree, key: 'retail', groups: ['brand'],
+      labels: { display: true, align: 'left', position: 'top', color: 'white', font: { weight: 'bold', size: 11 },
+        formatter: ctx => { const v = ctx.raw; if (!v) return ''; return [v.g || v.brand || '', fmtCompact(v.v)]; } },
+      backgroundColor: ctx => { const i = ctx.dataIndex||0; return PALETTE[i % PALETTE.length]; },
+      borderColor: 'white', borderWidth: 2, spacing: 1,
+    }]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => {
+        const v = c.raw; const name = v.g || v.brand || '—'; const pct = total ? (v.v/total*100).toFixed(1) : 0;
+        return `${name}: ${fmtNum(v.v)} (${pct}%)`;
+      } } } }
+    }
+  });
+}
+
+function renderFuelStacked() {
+  // Chart-local state + OEM slicers
+  const data = applySlicer(filteredData, chartSlicers.fuelStacked);
+  const months = allMonthKeys(data);
+  const labels = months.map(prettyYM);
+  // Rank fuels by total volume; keep top 8 + bucket the rest into "Other"
+  const TOP_N = 8;
+  const totalByFuel = aggBy(data, r => r.fuel);
+  const ranked = sortedMapEntries(totalByFuel).map(e => e[0]);
+  const topFuels = ranked.slice(0, TOP_N);
+  const otherFuels = new Set(ranked.slice(TOP_N));
+  const hasOther = otherFuels.size > 0;
+  const seriesNames = hasOther ? [...topFuels, 'Other'] : topFuels;
+  // Precompute per-month totals for each series
+  const monthIdx = new Map(months.map((m, i) => [m, i]));
+  const zero = () => new Array(months.length).fill(0);
+  const seriesData = new Map(seriesNames.map(n => [n, zero()]));
+  for (const r of data) {
+    const i = monthIdx.get(r.ym);
+    if (i == null) continue;
+    const key = otherFuels.has(r.fuel) ? 'Other' : r.fuel;
+    const arr = seriesData.get(key);
+    if (arr) arr[i] += r.retail;
+  }
+  const FUEL_COLORS = { 'EV': '#06A77D', 'ICE': '#6B7280', 'CNG': '#F59E0B', 'Other': '#9CA3AF' };
+  const datasets = seriesNames.map((f, i) => ({
+    label: f,
+    data: seriesData.get(f),
+    backgroundColor: FUEL_COLORS[f] || PALETTE[i % PALETTE.length],
+    borderRadius: 2
+  }));
+  // For tooltip & label use: monthly totals (across all fuel datasets) and per-fuel grand totals
+  const monthTotals = months.map((_, i) => seriesNames.reduce((acc, n) => acc + (seriesData.get(n)[i] || 0), 0));
+
+  charts.fuelStacked = new Chart(document.getElementById('c_fuelStacked'), {
+    type: 'bar',
+    data: { labels, datasets },
+    options: { responsive: true, maintainAspectRatio: false,
+      // Show all fuel layers when hovering a column → user sees ICE, EV, CNG side-by-side.
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'bottom', labels: { font:{size:11}, usePointStyle: true, padding: 10 } },
+        tooltip: {
+          callbacks: {
+            // Individual fuel rows with raw value + share of monthly total
+            label: c => {
+              const total = monthTotals[c.dataIndex] || 0;
+              const pct = total ? ((c.parsed.y / total) * 100).toFixed(1) : '0.0';
+              return c.dataset.label + ': ' + fmtNum(c.parsed.y) + '  (' + pct + '%)';
+            },
+            // Footer line — the monthly grand total
+            footer: items => {
+              if (!items.length) return '';
+              const total = monthTotals[items[0].dataIndex] || 0;
+              return 'Total retail: ' + fmtNum(total);
+            }
+          }
+        },
+        // Data labels: only on the top-most stack, showing the monthly TOTAL.
+        datalabels: {
+          display: ctx => {
+            const isTop = ctx.datasetIndex === ctx.chart.data.datasets.length - 1;
+            return globalLabelsOn && isTop;
+          },
+          color: '#1A1D23',
+          font: { weight: '700', size: 10 },
+          anchor: 'end', align: 'end', offset: 4,
+          formatter: (v, ctx) => fmtCompact(monthTotals[ctx.dataIndex] || 0)
+        }
+      },
+      scales: { x: { stacked: true, grid: { display: false }, ticks:{font:{size:10}} }, y: { stacked: true, ticks: { callback: fmtCompact, font:{size:10} }, grid:{color:'#F1F3F5'} } }
+    }
+  });
+}
+
+function renderEvIceDonut() {
+  // Prefer the explicit EV/ICE/CNG split rows when present
+  const has = (k) => filteredData.some(r => r.fuel.toUpperCase() === k);
+  let ev, ice, cng;
+  if (has('EV') || has('ICE') || has('CNG')) {
+    ev  = filteredData.filter(r => r.fuel.toUpperCase() === 'EV').reduce((a,r)=>a+r.retail,0);
+    ice = filteredData.filter(r => r.fuel.toUpperCase() === 'ICE').reduce((a,r)=>a+r.retail,0);
+    cng = filteredData.filter(r => r.fuel.toUpperCase() === 'CNG').reduce((a,r)=>a+r.retail,0);
+  } else {
+    ev  = filteredData.filter(r => isEV(r.fuel)).reduce((a,r)=>a+r.retail,0);
+    ice = filteredData.filter(r => !isEV(r.fuel)).reduce((a,r)=>a+r.retail,0);
+    cng = 0;
+  }
+  const labels = cng > 0 ? ['ICE','EV','CNG'] : ['ICE','EV'];
+  const dataArr = cng > 0 ? [ice, ev, cng] : [ice, ev];
+  const colors  = cng > 0 ? ['#6B7280','#06A77D','#F59E0B'] : ['#6B7280','#06A77D'];
+  charts.evIce = new Chart(document.getElementById('c_evIce'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: dataArr, backgroundColor: colors, borderWidth: 2, borderColor: 'white' }]},
+    options: { responsive: true, maintainAspectRatio: false, cutout: '65%',
+      plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 12, font:{size:11} } },
+        tooltip: { callbacks: { label: c => { const t=dataArr.reduce((a,x)=>a+x,0); const pct=t?(c.parsed/t*100).toFixed(1):0; return c.label+': '+fmtNum(c.parsed)+' ('+pct+'%)'; } } } }
+    }
+  });
+}
+
+// State name normalizer used to match GeoJSON 'ST_NM' (or fallback property) to our keys.
+function normalizeMapStateName(raw) {
+  if (!raw) return '';
+  let s = raw.toString().trim();
+  // GeoJSON often uses "&" — our normalizer uses "And"
+  s = s.replace(/&/g, 'And');
+  // Special cases for compound UTs etc.
+  s = s.replace(/Dadra\s*And\s*Nagar\s*Haveli\s*And\s*Daman\s*And\s*Diu/i, 'DNH and DD');
+  s = s.replace(/^NCT of Delhi$/i, 'Delhi');
+  s = s.replace(/Andaman\s*And\s*Nicobar(\s*Islands?)?/i, 'Andaman And Nicobar');
+  return titleCase(s);
+}
+
+// Red 7-step ramp for the choropleth fill
+const CHORO_RAMP = ['#FFF5F5','#FECACA','#FCA5A5','#F87171','#EF4444','#DC2626','#991B1B'];
+function choroColor(val, max) {
+  if (!val || max <= 0) return '#F1F3F5';
+  const idx = Math.min(CHORO_RAMP.length - 1, Math.floor((val / max) * CHORO_RAMP.length));
+  return CHORO_RAMP[Math.max(0, idx)];
+}
+
+// India map — choropleth via Leaflet GeoJSON, fetched once and cached
+function renderIndiaMap() {
+  const container = document.getElementById('mapBox');
+  container.innerHTML = '';
+  if (typeof L === 'undefined') {
+    document.getElementById('mapFallback').classList.remove('hidden');
+    return;
+  }
+  document.getElementById('mapFallback').classList.add('hidden');
+  if (mapInstance) { try { mapInstance.remove(); } catch(e){} mapInstance = null;
+  }
+  // Tight India bounds — locks panning so the map stays focused on the subcontinent.
+  // SW corner ≈ Lakshadweep / Tamil Nadu, NE corner ≈ Arunachal Pradesh / Kashmir.
+  const INDIA_BOUNDS = L.latLngBounds([6.5, 67.0], [37.5, 98.0]);
+  mapInstance = L.map(container, {
+    zoomControl: true,
+    scrollWheelZoom: false,
+    dragging: true,
+    attributionControl: false,
+    maxBounds: INDIA_BOUNDS,
+    maxBoundsViscosity: 1.0,         // hard wall — can't pan outside India
+    minZoom: 4,
+    maxZoom: 8
+  }).fitBounds(INDIA_BOUNDS, { padding: [4, 4] });
+
+  // Solid pale background so the world outside India is essentially invisible.
+  // We skip the global tile layer entirely so only the state shapes render.
+  container.style.background = '#F4F6F9';
+
+  const drawLayer = (geo) => paintChoropleth(geo);
+
+  if (indiaGeoJSON) {
+    drawLayer(indiaGeoJSON);
+  } else {
+    // jbrobst's india_states gist — properties.ST_NM
+    const url = 'https://gist.githubusercontent.com/jbrobst/56c13bbbf9d97d187fea01ca62ea5112/raw/e388c4cae20aa53cb5090210a42ebb9b765c0a36/india_states.geojson';
+    fetch(url)
+      .then(r => r.ok ? r.json() : Promise.reject(r.statusText))
+      .then(geo => { indiaGeoJSON = geo; drawLayer(geo); })
+      .catch(err => {
+        console.error('GeoJSON fetch failed', err);
+        document.getElementById('mapFallback').textContent = 'India boundaries failed to load (network blocked?). Showing legacy bubble fallback.';
+        document.getElementById('mapFallback').classList.remove('hidden');
+        paintBubblesFallback();
+      });
+  }
+}
+
+// Filled inside paintChoropleth — per-state centroid + label HTML so the Labels toggle
+// can render / clear them without recomputing the map.
+let stateLabelHandles = [];
+
+function paintChoropleth(geo) {
+  stateLabelHandles = [];
+  // Aggregate retail by state + compute state YoY (use totals view to avoid double-count)
+  const byState = aggBy(filteredTotals, r => r.state);
+
+  // For YoY: prior-year lookup uses the full time series (skip time filter), so we can find
+  // the same calendar month one year before even when the user picked a single year.
+  // But the "current" month (lastM) MUST come from the filtered window — otherwise picking
+  // an older year would still anchor lastM to today's data and YoY collapses.
+  const hasTotalTag = rawData.some(r => r.isTotal);
+  const allTimeBase = filterRows({ skipTime: true })
+    .filter(r => filters.fuel.length || !hasTotalTag || r.isTotal);
+  const stateMonth = new Map();
+  for (const r of allTimeBase) {
+    const k = r.state + '|' + r.ym;
+    stateMonth.set(k, (stateMonth.get(k)||0) + r.retail);
+  }
+  // lastM = latest month present in the filtered window
+  const filteredMonths = [...new Set(filteredTotals.map(r => r.ym))].sort();
+  const lastM = filteredMonths[filteredMonths.length-1];
+  let prevYM = null;
+  if (lastM) { const [y,m]=lastM.split('-').map(Number); prevYM = (y-1)+'-'+String(m).padStart(2,'0'); }
+  const maxV = Math.max(1, ...byState.values());
+
+  const layer = L.geoJSON(geo, {
+    style: feature => {
+      const name = normalizeMapStateName(
+        feature.properties.ST_NM || feature.properties.NAME_1 || feature.properties.name || ''
+      );
+      const v = byState.get(name) || 0;
+      return {
+        fillColor: choroColor(v, maxV),
+        weight: 1.6,                  // bold-ish boundaries
+        color: '#1F2937',             // dark slate
+        fillOpacity: 0.85,
+        opacity: 0.9
+      };
+    },
+    onEachFeature: (feature, lyr) => {
+      const rawName = feature.properties.ST_NM || feature.properties.NAME_1 || feature.properties.name || '';
+      const name = normalizeMapStateName(rawName);
+      const vol = byState.get(name) || 0;
+      let yoy = null;
+      if (lastM && prevYM) {
+        const cur = stateMonth.get(name+'|'+lastM);
+        const prv = stateMonth.get(name+'|'+prevYM);
+        if (cur && prv) yoy = ((cur-prv)/prv)*100;
+      }
+      const yoyTxt = yoy == null ? '—' : (yoy>=0?'+':'') + yoy.toFixed(1) + '%';
+      lyr.bindTooltip(
+        `<b>${rawName || name}</b><br>Retail: ${fmtNum(vol)}<br>YoY: ${yoyTxt}`,
+        { direction: 'top', sticky: true, offset: [0,-4] }
+      );
+      lyr.on('mouseover', () => lyr.setStyle({ weight: 3, color: '#000' }));
+      lyr.on('mouseout',  () => layer.resetStyle(lyr));
+
+      // Stash centroid + label content so the Labels toggle can show/hide them on demand
+      if (vol > 0) {
+        const abbrev = STATE_ABBREV[name] || (rawName || name).slice(0, 3).toUpperCase();
+        let center;
+        try { center = lyr.getBounds().getCenter(); } catch (e) { center = null; }
+        if (center) {
+          stateLabelHandles.push({
+            latlng: center,
+            html: `<b>${abbrev}</b><br>${fmtCompact(vol)}`,
+            tooltip: null
+          });
+        }
+      }
+    }
+  }).addTo(mapInstance);
+  mapLayer = layer;
+
+  // Legend
+  const legend = L.control({ position: 'bottomright' });
+  legend.onAdd = () => {
+    const div = L.DomUtil.create('div', 'legend-bar');
+    const steps = CHORO_RAMP.length;
+    let html = '<b>Retail volume</b><br>';
+    for (let i = 0; i < steps; i++) {
+      const lo = Math.round((i/steps) * maxV);
+      const hi = Math.round(((i+1)/steps) * maxV);
+      html += `<i style="background:${CHORO_RAMP[i]}"></i>${fmtCompact(lo)} – ${fmtCompact(hi)}<br>`;
+    }
+    div.innerHTML = html;
+    return div;
+  };
+  legend.addTo(mapInstance);
+
+  // Labels toggle button in the top-right of the map
+  const labelToggle = L.control({ position: 'topright' });
+  labelToggle.onAdd = () => {
+    const btn = L.DomUtil.create('button', 'map-label-toggle');
+    btn.type = 'button';
+    btn.textContent = 'Labels';
+    btn.title = 'Show / hide state labels';
+    if (mapLabelsOn) btn.classList.add('active');
+    L.DomEvent.disableClickPropagation(btn);
+    btn.addEventListener('click', () => {
+      mapLabelsOn = !mapLabelsOn;
+      btn.classList.toggle('active', mapLabelsOn);
+      applyMapLabels();
+    });
+    return btn;
+  };
+  labelToggle.addTo(mapInstance);
+
+  // Apply initial label state (respects user's last choice if they re-render)
+  applyMapLabels();
+}
+
+// Show / hide the persistent state-name labels per `mapLabelsOn`.
+function applyMapLabels() {
+  if (!mapInstance) return;
+  if (mapLabelsOn) {
+    for (const h of stateLabelHandles) {
+      if (h.tooltip) continue;
+      h.tooltip = L.tooltip({ permanent: true, direction: 'center', className: 'state-label', interactive: false })
+        .setLatLng(h.latlng)
+        .setContent(h.html)
+        .addTo(mapInstance);
+    }
+  } else {
+    for (const h of stateLabelHandles) {
+      if (h.tooltip) { mapInstance.removeLayer(h.tooltip); h.tooltip = null; }
+    }
+  }
+}
+
+// Last-resort fallback if the GeoJSON fetch is blocked — keeps the centroid bubble logic.
+function paintBubblesFallback() {
+  const byState = aggBy(filteredTotals, r => r.state);
+  const states = [...byState.keys()];
+  const maxR = Math.max(1, ...states.map(s => byState.get(s) || 0));
+  for (const s of states) {
+    const c = STATE_CENTROIDS[s];
+    if (!c) continue;
+    const vol = byState.get(s);
+    const radius = 6 + Math.sqrt(vol/maxR) * 34;
+    L.circleMarker(c, { radius, color: 'white', weight: 1.5, fillColor: '#E63946', fillOpacity: 0.75 })
+      .addTo(mapInstance)
+      .bindTooltip(`<b>${s}</b><br>Retail: ${fmtNum(vol)}`, { direction: 'top', offset: [0,-4] });
+  }
+}
+
+function lineOpts(yLabel, yFmt) {
+  return {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { intersect: false, mode: 'index' },
+    plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => yLabel + ': ' + (yFmt ? yFmt(c.parsed.y) : c.parsed.y) } } },
+    scales: { x: { grid: { display: false }, ticks: { font:{size:10}, maxRotation: 0, autoSkip: true } },
+              y: { grid: { color: '#F1F3F5' }, ticks: { callback: yFmt || (v=>v), font:{size:10} } } }
+  };
+}
+
+// ============ PAGE 2: OEM ANALYSIS ============
+function renderPage2() {
+  renderOemShareTrend();
+  renderOemCompare();
+  renderWaterfall();
+}
+
+function renderOemShareTrend() {
+  // Chart-local state slicer
+  const rows = applySlicer(filteredTotals, chartSlicers.oemShareTrend);
+  // Top 8 OEMs by total retail
+  const byOem = aggBy(rows, r => r.oem);
+  const topOems = sortedMapEntries(byOem).slice(0, 8).map(e => e[0]);
+  const months = allMonthKeys(rows);
+  const labels = months.map(prettyYM);
+  // Monthly totals
+  const totals = new Map();
+  for (const r of rows) totals.set(r.ym, (totals.get(r.ym)||0)+r.retail);
+  const datasets = topOems.map((oem, i) => {
+    const data = months.map(m => {
+      const t = totals.get(m) || 0;
+      const v = rows.filter(r => r.ym===m && r.oem===oem).reduce((a,r)=>a+r.retail,0);
+      return t ? (v/t)*100 : 0;
+    });
+    const color = PALETTE[i%PALETTE.length];
+    return { label: oem, data, borderColor: color, backgroundColor: color+'22', fill: false, tension: 0.3, borderWidth: 2, pointRadius: 1.5, pointHoverRadius: 4, oemName: oem };
+  });
+  charts.oemShareTrend = new Chart(document.getElementById('c_oemShareTrend'), {
+    type: 'line',
+    data: { labels, datasets },
+    plugins: [oemLogoPlugin],
+    options: { responsive: true, maintainAspectRatio: false,
+      // Logo badges are 30 px wide, so the plot area needs ≥ 24 px clearance on each side
+      // to keep them off the y-axis labels and inside the chart card.
+      layout: { padding: { left: 44, right: 44, top: 8 } },
+      interaction: { intersect: false, mode: 'index' },
+      plugins: {
+        legend: { position: 'bottom', labels: { font:{size:11}, usePointStyle:true, padding: 10 } },
+        tooltip: { callbacks: { label: c => c.dataset.label + ': ' + c.parsed.y.toFixed(1) + '%' } },
+        // Data labels in the same colour as the line. Skipped at first/last point of
+        // every series since the OEM logo sits there — otherwise the % overlaps the logo.
+        datalabels: {
+          display: (ctx) => {
+            if (!globalLabelsOn) return false;
+            const last = ctx.dataset.data.length - 1;
+            if (ctx.dataIndex === 0 || ctx.dataIndex === last) return false;
+            return 'auto';
+          },
+          formatter: v => (typeof v === 'number' ? v.toFixed(1)+'%' : '')
+        }
+      },
+      scales: { x: { grid: { display: false }, ticks:{font:{size:10}, maxRotation:0, autoSkip:true} }, y: { grid: { color:'#F1F3F5' }, ticks: { callback: v => v+'%', font:{size:10} } } }
+    }
+  });
+}
+
+// OEM logo plugin
+//   • Looks for `logos/<slug>.png` next to this HTML file, where `slug` is the clean
+//     OEM name lowercased and non-alphanumerics replaced with underscores.
+//   • Examples (using the user's Settings sheet clean names):
+//        "Hero"          -> logos/hero.png
+//        "Honda"         -> logos/honda.png
+//        "TVS"           -> logos/tvs.png
+//        "Bajaj"         -> logos/bajaj.png
+//        "Suzuki"        -> logos/suzuki.png
+//        "Yamaha"        -> logos/yamaha.png
+//        "Royal Enfield" -> logos/royal_enfield.png
+//   • Logos render in a 30 px circular badge with a white background and a coloured
+//     ring matching the line. The image is letter-boxed (aspect-ratio preserved) so
+//     wide marks like Honda's wings don't get squashed.
+//   • If a file is missing or fails to load, falls back to a coloured circle showing
+//     the OEM's initials.
+const logoCache = new Map();
+const LOGO_SIZE = 30;            // overall badge diameter
+const LOGO_RING = 1.6;           // ring thickness
+const LOGO_INSET = 4;            // padding between ring and image
+function getOemLogo(oem) {
+  if (logoCache.has(oem)) return logoCache.get(oem);
+  const img = new Image();
+  const slug = oem.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+  img.src = 'logos/' + slug + '.png';
+  img.onerror = () => { img._failed = true; };
+  // Trigger a redraw of any chart with logos once the image arrives (so logos appear
+  // on first paint instead of waiting for the next user interaction).
+  img.onload = () => {
+    Object.values(charts).forEach(c => {
+      if (c && c.config && c.config.plugins && c.config.plugins.includes(oemLogoPlugin)) c.update('none');
+    });
+  };
+  logoCache.set(oem, img);
+  return img;
+}
+const oemLogoPlugin = {
+  id: 'oemLogos',
+  afterDatasetsDraw: (chart) => {
+    const ctx = chart.ctx;
+    chart.data.datasets.forEach((ds, di) => {
+      const meta = chart.getDatasetMeta(di);
+      const pts = meta && meta.data;
+      if (!pts || !pts.length) return;
+      const oem = ds.oemName || ds.label;
+      if (!oem) return;
+      const img = getOemLogo(oem);
+      // Anchor logos slightly inside the chart so the 30 px badge clears the y-axis
+      // labels on the left and the chart's right edge.
+      const inset = LOGO_SIZE / 2 + 2;
+      const last = pts.length - 1;
+      const ends = pts.length === 1
+        ? [{ x: pts[0].x, y: pts[0].y }]
+        : [
+            { x: pts[0].x    + inset, y: pts[0].y    },
+            { x: pts[last].x - inset, y: pts[last].y }
+          ];
+      ends.forEach(pt => {
+        if (!pt) return;
+        const x = pt.x, y = pt.y;
+        const r = LOGO_SIZE / 2;
+        ctx.save();
+        // White circle background + coloured ring
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.closePath();
+        ctx.fillStyle = 'white'; ctx.fill();
+        ctx.lineWidth = LOGO_RING; ctx.strokeStyle = ds.borderColor || '#888'; ctx.stroke();
+        if (img && img.complete && !img._failed && img.naturalWidth > 0) {
+          // Letter-box the image inside the ring without distorting aspect ratio
+          const innerR = r - LOGO_INSET;
+          const aw = img.naturalWidth, ah = img.naturalHeight;
+          const scale = Math.min((innerR*2) / aw, (innerR*2) / ah);
+          const dw = aw * scale, dh = ah * scale;
+          ctx.beginPath(); ctx.arc(x, y, innerR, 0, Math.PI*2); ctx.closePath(); ctx.clip();
+          ctx.drawImage(img, x - dw/2, y - dh/2, dw, dh);
+        } else {
+          // Fallback: coloured fill + initials
+          ctx.beginPath(); ctx.arc(x, y, r - 2, 0, Math.PI*2); ctx.closePath();
+          ctx.fillStyle = ds.borderColor || '#888'; ctx.fill();
+          ctx.fillStyle = 'white';
+          ctx.font = 'bold 11px Inter, sans-serif';
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          // Use first 1–2 letters as initials (e.g. "TVS" -> "TV", "Royal Enfield" -> "RE")
+          const initials = oem.split(/\s+/).map(w => w.charAt(0)).join('').slice(0, 2).toUpperCase();
+          ctx.fillText(initials, x, y);
+        }
+        ctx.restore();
+      });
+    });
+  }
+};
+
+// "2025-07" -> "2024-07"  (prior-year same calendar month)
+function priorYearYm(ym) { const [y, m] = ym.split('-'); return (+y - 1) + '-' + m; }
+
+// Compute the "From" and "To" YMs anchoring the period-comparison charts.
+// Uses the user's filter values directly; falls back to the bounds of `rowsKeys`
+// (the earliest / latest YM the chart actually has data for) when they're blank.
+function periodAnchors(rowsKeys) {
+  const ms = rowsKeys.length ? rowsKeys : (rawData.length ? [...new Set(rawData.map(r => r.ym))].sort() : []);
+  if (!ms.length) return { baseYm: '', endYm: '' };
+  return {
+    baseYm: filters.fromYm || ms[0],
+    endYm:  filters.toYm   || ms[ms.length - 1]
+  };
+}
+
+function renderOemCompare() {
+  // Chart-local state slicer
+  const totalsRows = applySlicer(filteredTotals, chartSlicers.oemCompare);
+  const dataRows   = applySlicer(filteredData,   chartSlicers.oemCompare);
+  const currentMonths = allMonthKeys(totalsRows);
+  if (!currentMonths.length) {
+    charts.oemCompare = new Chart(document.getElementById('c_oemCompare'), { type: 'bar', data: { labels: [], datasets: [] }, options: {} });
+    return;
+  }
+
+  // The two bars are anchored to the From-month and the To-month specifically.
+  const { baseYm, endYm } = periodAnchors(currentMonths);
+
+  // Aggregate retail per OEM at the two anchor months.
+  const byOemBase = new Map(), byOemEnd = new Map();
+  for (const r of totalsRows) {
+    if (r.ym === baseYm) byOemBase.set(r.oem, (byOemBase.get(r.oem)||0) + r.retail);
+    if (r.ym === endYm)  byOemEnd .set(r.oem, (byOemEnd .get(r.oem)||0) + r.retail);
+  }
+  // Sort by end-month volume desc, take top 12
+  const oems = sortedMapEntries(byOemEnd).slice(0, 12).map(e => e[0]);
+
+  // Fuel-split tooltip helper — same period anchoring
+  const fuelSplitAt = (oem, ym) => {
+    const rs = dataRows.filter(r => r.oem === oem && r.ym === ym);
+    if (!rs.length) return null;
+    const sum = (f) => rs.filter(r => r.fuel.toUpperCase() === f).reduce((a,r)=>a+r.retail, 0);
+    const ev = sum('EV'), ice = sum('ICE'), cng = sum('CNG');
+    const total = ev + ice + cng;
+    if (!total) return null;
+    return { ev: ev/total*100, ice: ice/total*100, cng: cng/total*100 };
+  };
+
+  charts.oemCompare = new Chart(document.getElementById('c_oemCompare'), {
+    type: 'bar',
+    data: { labels: oems, datasets: [
+      // Bar 1 = From month
+      { label: prettyYM(baseYm), data: oems.map(o => byOemBase.get(o)||0), backgroundColor: '#C7D2FE', borderRadius: 4, ymKey: baseYm },
+      // Bar 2 = To month
+      { label: prettyYM(endYm),  data: oems.map(o => byOemEnd .get(o)||0), backgroundColor: '#E63946', borderRadius: 4, ymKey: endYm  }
+    ]},
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { font:{size:11}, usePointStyle:true, padding: 10 } },
+        tooltip: { callbacks: {
+          label: c => c.dataset.label + ': ' + fmtNum(c.parsed.y),
+          afterLabel: c => {
+            const oem = oems[c.dataIndex];
+            const sp = fuelSplitAt(oem, c.dataset.ymKey);
+            if (!sp) return '';
+            const parts = [];
+            if (sp.ice > 0) parts.push('ICE ' + sp.ice.toFixed(1) + '%');
+            if (sp.ev  > 0) parts.push('EV '  + sp.ev.toFixed(1)  + '%');
+            if (sp.cng > 0) parts.push('CNG ' + sp.cng.toFixed(1) + '%');
+            return parts.length ? '   ' + parts.join('  ·  ') : '';
+          }
+        } }
+      },
+      scales: { x: { grid: { display: false }, ticks:{font:{size:10}} }, y: { grid: { color:'#F1F3F5' }, ticks: { callback: fmtCompact, font:{size:10} } } }
+    }
+  });
+}
+
+function renderGrowthShare() {
+  // Bubble: x=share%, y=YoY%, size=current retail
+  const months = allMonthKeys(filteredTotals);
+  if (!months.length) { charts.growthShare = new Chart(document.getElementById('c_growthShare'), { type: 'scatter', data:{datasets:[]}, options:{}}); return; }
+  const last = months[months.length-1];
+  const [y,m] = last.split('-').map(Number);
+  const prevY = (y-1)+'-'+String(m).padStart(2,'0');
+  const hasTotalTag = rawData.some(r => r.isTotal);
+  const byOemLast = new Map(), byOemPrev = new Map();
+  for (const r of filteredTotals) {
+    if (r.ym === last) byOemLast.set(r.oem, (byOemLast.get(r.oem)||0)+r.retail);
+  }
+  for (const r of rawData) {
+    if (r.ym !== prevY) continue;
+    if (!passesState(r) || !passesOem(r) || !passesFuel(r)) continue;
+    if (!filters.fuel.length && hasTotalTag && !r.isTotal) continue;
+    byOemPrev.set(r.oem, (byOemPrev.get(r.oem)||0)+r.retail);
+  }
+  const totalLast = [...byOemLast.values()].reduce((a,b)=>a+b,0);
+  const topOems = sortedMapEntries(byOemLast).slice(0, 15).map(e => e[0]);
+  const maxSize = Math.max(1, ...topOems.map(o => byOemLast.get(o)||0));
+  const points = topOems.map((o, i) => {
+    const cur = byOemLast.get(o) || 0;
+    const prv = byOemPrev.get(o) || 0;
+    const share = totalLast ? (cur/totalLast)*100 : 0;
+    const yoy = prv ? ((cur-prv)/prv)*100 : null;
+    return { x: share, y: yoy == null ? 0 : yoy, r: 6 + Math.sqrt(cur/maxSize)*20, oem: o, cur, prv, yoy };
+  });
+  charts.growthShare = new Chart(document.getElementById('c_growthShare'), {
+    type: 'bubble',
+    data: { datasets: points.map((p, i) => ({
+      label: p.oem,
+      data: [p],
+      backgroundColor: PALETTE[i%PALETTE.length]+'CC',
+      borderColor: PALETTE[i%PALETTE.length],
+      borderWidth: 1.5
+    })) },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => {
+          const d = c.raw; const yt = d.yoy==null?'—':(d.yoy>=0?'+':'')+d.yoy.toFixed(1)+'%';
+          return `${d.oem}: ${d.x.toFixed(1)}% share, YoY ${yt}, ${fmtCompact(d.cur)} units`;
+        } } },
+        // OEM labels are always shown next to each bubble (independent of the global Labels toggle)
+        datalabels: {
+          display: true,
+          color: ctx => ctx.dataset.borderColor,
+          font: { weight: '600', size: 10 },
+          backgroundColor: 'rgba(255,255,255,0.85)',
+          borderRadius: 3,
+          padding: { top: 1, bottom: 1, left: 4, right: 4 },
+          anchor: 'end', align: 'top', offset: 4, clamp: true,
+          formatter: (v) => v && v.oem ? v.oem : ''
+        }
+      },
+      scales: {
+        x: { title: { display: true, text: 'Market share (%) →', font:{size:11, weight:'600'} }, grid: { color:'#F1F3F5' }, ticks: { callback: v=>v+'%', font:{size:10} } },
+        y: { title: { display: true, text: 'YoY growth (%) →', font:{size:11, weight:'600'} }, grid: { color:'#F1F3F5' }, ticks: { callback: v=>v+'%', font:{size:10} } }
+      }
+    }
+  });
+}
+
+function renderWaterfall() {
+  // Contribution to growth by OEM between TWO ANCHOR MONTHS chosen from the filter bar:
+  //   • Base = the month picked in the From dropdown
+  //   • End  = the month picked in the To   dropdown
+  // Each inner bar shows that OEM's delta (end-month volume − base-month volume).
+  const months = allMonthKeys(filteredTotals);
+  if (!months.length) { charts.waterfall = new Chart(document.getElementById('c_waterfall'), { type: 'bar', data:{datasets:[]}, options:{}}); return; }
+  const { baseYm, endYm } = periodAnchors(months);
+
+  const byOemLast = new Map(), byOemPrev = new Map();
+  for (const r of filteredTotals) {
+    if (r.ym === baseYm) byOemPrev.set(r.oem, (byOemPrev.get(r.oem)||0) + r.retail);
+    if (r.ym === endYm)  byOemLast.set(r.oem, (byOemLast.get(r.oem)||0) + r.retail);
+  }
+  const oems = [...new Set([...byOemLast.keys(), ...byOemPrev.keys()])];
+  const contrib = oems.map(o => ({ oem: o, delta: (byOemLast.get(o)||0) - (byOemPrev.get(o)||0) }));
+  contrib.sort((a,b) => Math.abs(b.delta) - Math.abs(a.delta));
+  const top = contrib.slice(0, 10);
+  const othersDelta = contrib.slice(10).reduce((a,x)=>a+x.delta, 0);
+  if (othersDelta) top.push({ oem: 'Others', delta: othersDelta });
+
+  const prevTotal = [...byOemPrev.values()].reduce((a,b)=>a+b,0);
+  const lastTotal = [...byOemLast.values()].reduce((a,b)=>a+b,0);
+
+  // Floating bars: each step shows the delta; start from running total.
+  // Base bar uses the From month, end bar uses the To month.
+  const labels = [prettyYM(baseYm) + ' (base)'].concat(top.map(x => x.oem)).concat([prettyYM(endYm) + ' (end)']);
+  let running = prevTotal;
+  const data = [[0, prevTotal]]; // base bar
+  const colors = ['#94A3B8'];
+  for (const c of top) {
+    const start = running;
+    running += c.delta;
+    data.push(c.delta >= 0 ? [start, running] : [running, start]);
+    colors.push(c.delta >= 0 ? '#10B981' : '#EF4444');
+  }
+  data.push([0, lastTotal]);
+  colors.push('#3A86FF');
+
+  charts.waterfall = new Chart(document.getElementById('c_waterfall'), {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Contribution', data, backgroundColor: colors, borderRadius: 3 }]},
+    options: { responsive: true, maintainAspectRatio: false, indexAxis: 'x',
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => {
+          const [a,b] = c.raw; const v = b - a;
+          if (c.dataIndex === 0) return 'Base: ' + fmtNum(prevTotal);
+          if (c.dataIndex === data.length-1) return 'End: ' + fmtNum(lastTotal);
+          return (v>=0?'+':'') + fmtNum(Math.abs(v)) + (top[c.dataIndex-1] ? ' • ' + top[c.dataIndex-1].oem : '');
+        } } },
+        // Waterfall data is floating bars `[low, high]` — global formatter can't handle
+        // arrays. Custom formatter prints the delta with a sign for inner bars and the
+        // full total for the start/end bars.
+        datalabels: {
+          color: (ctx) => colors[ctx.dataIndex] || '#1A1D23',
+          font: { weight: '700', size: 10 },
+          anchor: (ctx) => {
+            const [a,b] = ctx.dataset.data[ctx.dataIndex] || [0,0];
+            return b >= a ? 'end' : 'start';
+          },
+          align: 'end',
+          offset: 2,
+          formatter: (val, ctx) => {
+            const arr = ctx.dataset.data[ctx.dataIndex];
+            if (!Array.isArray(arr)) return '';
+            const [a,b] = arr;
+            if (ctx.dataIndex === 0) return fmtCompact(prevTotal);
+            if (ctx.dataIndex === data.length-1) return fmtCompact(lastTotal);
+            const d = b - a;
+            return (d>=0?'+':'') + fmtCompact(Math.abs(d));
+          }
+        }
+      },
+      scales: { x: { grid: { display: false }, ticks: { font:{size:9}, maxRotation: 45 } }, y: { grid: { color:'#F1F3F5' }, ticks: { callback: fmtCompact, font:{size:10} } } }
+    }
+  });
+}
+
+// ============ PAGE 3: STATE ANALYSIS ============
+function renderPage3() {
+  renderStateTrend();
+  renderStateOem();
+  renderStateFuel();
+  renderHeatmap();
+}
+
+// True if the row's state looks like an aggregated "Pan India" / "All India" entry
+function isPanIndiaState(s) {
+  return /^(pan|all)[\s-]*india$/i.test((s || '').trim());
+}
+function renderStateTrend() {
+  const showPan = !!chartSlicers.stateTrend.panIndia;
+  // Top 6 by retail volume. By default we filter out the "Pan India" aggregate row
+  // since it'd dominate any state-level ranking.
+  const byState = aggBy(filteredTotals, r => r.state);
+  const entries = sortedMapEntries(byState).filter(([s]) => showPan || !isPanIndiaState(s));
+  const topStates = entries.slice(0, 6).map(e => e[0]);
+  const months = allMonthKeys(filteredTotals);
+  const labels = months.map(prettyYM);
+  const datasets = topStates.map((s, i) => {
+    const data = months.map(m => filteredTotals.filter(r => r.ym===m && r.state===s).reduce((a,r)=>a+r.retail,0));
+    return { label: s, data, borderColor: PALETTE[i%PALETTE.length], backgroundColor: PALETTE[i%PALETTE.length]+'22', fill: false, tension: 0.3, borderWidth: 2, pointRadius: 1.5, pointHoverRadius: 4 };
+  });
+  charts.stateTrend = new Chart(document.getElementById('c_stateTrend'), {
+    type: 'line',
+    data: { labels, datasets },
+    options: { responsive: true, maintainAspectRatio: false,
+      interaction: { intersect: false, mode: 'index' },
+      plugins: { legend: { position: 'bottom', labels: { font:{size:11}, usePointStyle:true, padding: 10 } }, tooltip: { callbacks: { label: c => c.dataset.label + ': ' + fmtNum(c.parsed.y) } } },
+      scales: { x: { grid: { display: false }, ticks:{font:{size:10}, maxRotation:0, autoSkip:true} }, y: { grid: { color:'#F1F3F5' }, ticks: { callback: fmtCompact, font:{size:10} } } }
+    }
+  });
+}
+
+function renderStateOem() {
+  // Top 10 states × 100%-stacked by top 8 OEMs (+ Other bucket)
+  const byState = aggBy(filteredTotals, r => r.state);
+  const topStates = sortedMapEntries(byState).slice(0, 10).map(e => e[0]);
+  const byOem = aggBy(filteredTotals, r => r.oem);
+  const topOems = sortedMapEntries(byOem).slice(0, 8).map(e => e[0]);
+
+  // Absolute volumes per (state, oem)
+  const absByOem = {};
+  for (const oem of topOems) {
+    absByOem[oem] = topStates.map(s =>
+      filteredTotals.filter(r => r.state===s && r.oem===oem).reduce((a,r)=>a+r.retail,0)
+    );
+  }
+  const stateTotals = topStates.map(s =>
+    filteredTotals.filter(r => r.state===s).reduce((a,r)=>a+r.retail,0)
+  );
+  // 'Other' bucket — whatever isn't covered by the top OEMs
+  const otherAbs = topStates.map((s, i) => {
+    const top = topOems.reduce((acc, o) => acc + absByOem[o][i], 0);
+    return Math.max(0, stateTotals[i] - top);
+  });
+
+  const toPct = (arr) => arr.map((v, i) => stateTotals[i] ? (v / stateTotals[i]) * 100 : 0);
+
+  const datasets = topOems.map((oem, i) => ({
+    label: oem,
+    data: toPct(absByOem[oem]),
+    abs:  absByOem[oem],
+    backgroundColor: PALETTE[i % PALETTE.length],
+    borderRadius: 2
+  }));
+  if (otherAbs.some(x => x > 0)) {
+    datasets.push({ label: 'Other', data: toPct(otherAbs), abs: otherAbs, backgroundColor: '#94A3B8', borderRadius: 2 });
+  }
+
+  charts.stateOem = new Chart(document.getElementById('c_stateOem'), {
+    type: 'bar',
+    data: { labels: topStates, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+      plugins: {
+        legend: { position: 'bottom', labels: { font:{size:11}, usePointStyle:true, padding: 10 } },
+        tooltip: { callbacks: {
+          label: c => {
+            const ds = c.dataset;
+            const abs = ds.abs ? ds.abs[c.dataIndex] : null;
+            const pct = c.parsed.x;
+            return `${ds.label}: ${abs!=null?fmtNum(abs):'—'} (${pct.toFixed(1)}%)`;
+          }
+        } },
+        // Datalabels CENTRED inside each segment — white text contrasts every PALETTE colour
+        datalabels: {
+          anchor: 'center', align: 'center', offset: 0,
+          backgroundColor: null,
+          color: 'white',
+          font: { weight: '700', size: 10 },
+          formatter: v => v >= 6 ? v.toFixed(0) + '%' : ''
+        }
+      },
+      scales: {
+        x: { stacked: true, max: 100, ticks: { callback: v => v+'%', font:{size:10} }, grid: { color:'#F1F3F5' } },
+        y: { stacked: true, ticks:{font:{size:10}}, grid: { display: false } }
+      }
+    }
+  });
+}
+
+function renderStateFuel() {
+  // Chart-local state slicer takes precedence over the global state filter
+  const slicerStates = chartSlicers.stateFuel.state;
+  const states = slicerStates && slicerStates.length ? slicerStates : filters.state;
+  const rows = states.length ? filteredData.filter(r => states.includes(r.state)) : filteredData;
+  document.getElementById('fuelStateSub').textContent = states.length
+    ? (states.length <= 2 ? states.join(', ') : states.length + ' states')
+    : 'All states';
+  const byFuel = aggBy(rows, r => r.fuel);
+  let entries = sortedMapEntries(byFuel);
+  // If many fuels exist (legacy raw-fuels mode), cap at top 10 + Other
+  if (entries.length > 10) {
+    const head = entries.slice(0, 10);
+    const other = entries.slice(10).reduce((a,e)=>a+e[1], 0);
+    entries = [...head, ['Other', other]];
+  }
+  const total = entries.reduce((a,e)=>a+e[1],0);
+  // Color map: known categories get fixed colors; rest fall back to palette
+  const COLOR_MAP = { 'EV': '#06A77D', 'ICE': '#6B7280', 'CNG': '#F59E0B', 'Other': '#9CA3AF' };
+  const bg = entries.map((e, i) => COLOR_MAP[e[0]] || PALETTE[i % PALETTE.length]);
+  charts.stateFuel = new Chart(document.getElementById('c_stateFuel'), {
+    type: 'doughnut',
+    data: { labels: entries.map(e=>e[0]), datasets: [{ data: entries.map(e=>e[1]), backgroundColor: bg, borderWidth: 2, borderColor: 'white' }]},
+    options: { responsive: true, maintainAspectRatio: false, cutout: '60%',
+      plugins: {
+        legend: { position: 'bottom', labels: { font:{size:11}, usePointStyle:true, padding: 8, boxWidth: 8 } },
+        tooltip: { callbacks: { label: c => { const pct=total?(c.parsed/total*100).toFixed(1):0; return c.label+': '+fmtNum(c.parsed)+' ('+pct+'%)'; } } },
+        // Always-on labels — show "FUEL  XX%" on each slice (hide tiny <3% slices)
+        datalabels: {
+          display: ctx => {
+            const v = ctx.dataset.data[ctx.dataIndex];
+            return v && total && (v / total) >= 0.03;
+          },
+          color: 'white',
+          font: { weight: '700', size: 11 },
+          textShadowBlur: 4, textShadowColor: 'rgba(0,0,0,0.25)',
+          backgroundColor: null,
+          anchor: 'center', align: 'center',
+          formatter: (v, ctx) => {
+            const pct = total ? (v / total) * 100 : 0;
+            return ctx.chart.data.labels[ctx.dataIndex] + '\n' + pct.toFixed(0) + '%';
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderHeatmap() {
+  // Top 15 states × all months → matrix chart
+  const byState = aggBy(filteredTotals, r => r.state);
+  const topStates = sortedMapEntries(byState).slice(0, 15).map(e => e[0]).reverse(); // top at top
+  const months = allMonthKeys(filteredTotals);
+  const labels = months.map(prettyYM);
+
+  const map = new Map();
+  for (const r of filteredTotals) {
+    const k = r.state + '|' + r.ym;
+    map.set(k, (map.get(k)||0) + r.retail);
+  }
+  const points = [];
+  for (const s of topStates) for (const m of months) {
+    points.push({ x: prettyYM(m), y: s, v: map.get(s + '|' + m) || 0 });
+  }
+  const maxV = Math.max(1, ...points.map(p => p.v));
+
+  charts.heatmap = new Chart(document.getElementById('c_heatmap'), {
+    type: 'matrix',
+    data: { datasets: [{
+      label: 'Retail', data: points,
+      backgroundColor: c => {
+        const v = c.raw.v;
+        const a = v / maxV;
+        // red scale
+        return `rgba(230,57,70,${0.08 + 0.85*a})`;
+      },
+      borderColor: 'white', borderWidth: 1,
+      width: ({chart}) => {
+        const w = chart.chartArea && chart.chartArea.width;
+        return w ? (w / Math.max(1, labels.length) - 1) : 20;
+      },
+      height: ({chart}) => {
+        const h = chart.chartArea && chart.chartArea.height;
+        return h ? (h / Math.max(1, topStates.length) - 1) : 20;
+      },
+    }]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { title: () => '', label: c => `${c.raw.y} · ${c.raw.x}: ${fmtNum(c.raw.v)}` } },
+        // Always-on cell numbers. Dark text on light cells, white text on dark cells
+        // (using the same colour-intensity threshold as the cell fill).
+        datalabels: {
+          display: true,
+          font: { weight: '600', size: 9 },
+          color: c => ((c.dataset.data[c.dataIndex].v / maxV) > 0.55 ? 'white' : '#1A1D23'),
+          formatter: v => v && v.v ? fmtCompact(v.v) : '',
+          anchor: 'center', align: 'center',
+          padding: 0,
+          backgroundColor: null
+        }
+      },
+      scales: {
+        x: { type: 'category', labels, grid: { display: false }, ticks: { font:{size:10}, maxRotation: 0, autoSkip: true } },
+        y: { type: 'category', labels: topStates, grid: { display: false }, ticks: { font:{size:10} }, offset: true }
+      }
+    }
+  });
+}
+
+// ============ PAGE 4: MATRIX TABLE ============
+document.getElementById('matrixMetric').addEventListener('change', renderMatrix);
+document.getElementById('matrixTopN').addEventListener('change', renderMatrix);
+document.getElementById('matrixOemN').addEventListener('change', renderMatrix);
+document.getElementById('exportMatrixBtn').addEventListener('click', exportMatrix);
+
+function renderPage4() { renderMatrix(); }
+
+function buildMatrix() {
+  const topN = +document.getElementById('matrixTopN').value;
+  const oemN = +document.getElementById('matrixOemN').value;
+  const metric = document.getElementById('matrixMetric').value;
+  const months = allMonthKeys(filteredTotals);
+
+  // Top states (by total retail in current filter — uses ALL FUEL rows)
+  const byState = aggBy(filteredTotals, r => r.state);
+  const topStates = sortedMapEntries(byState).slice(0, topN).map(e => e[0]);
+
+  // Current-period volume map (state|oem|ym)
+  const vol = new Map();
+  for (const r of filteredTotals) {
+    const k = r.state + '|' + r.oem + '|' + r.ym;
+    vol.set(k, (vol.get(k)||0) + r.retail);
+  }
+  // Prior-year lookups: from rawData respecting OEM/fuel filters only (not year/month/state)
+  const hasTotalTag = rawData.some(r => r.isTotal);
+  const baseForYoY = rawData.filter(r => {
+    if (!passesOem(r) || !passesFuel(r)) return false;
+    if (!filters.fuel.length && hasTotalTag && !r.isTotal) return false;
+    return true;
+  });
+  const volOemAllYM = new Map();   // state|oem|ym -> retail (full history)
+  const volStateAllYM = new Map(); // state|ym -> retail (full history)
+  for (const r of baseForYoY) {
+    const ko = r.state + '|' + r.oem + '|' + r.ym;
+    volOemAllYM.set(ko, (volOemAllYM.get(ko)||0) + r.retail);
+    const ks = r.state + '|' + r.ym;
+    volStateAllYM.set(ks, (volStateAllYM.get(ks)||0) + r.retail);
+  }
+
+  // For each state: determine top OEMs
+  const rows = [];
+  for (const s of topStates) {
+    const stateRows = filteredTotals.filter(r => r.state === s);
+    const byOem = aggBy(stateRows, r => r.oem);
+    const topOems = sortedMapEntries(byOem).slice(0, oemN).map(e => e[0]);
+    // State subtotal row — use the FULL state total (across all OEMs), not just top OEMs.
+    const stateTotals = months.map(m => {
+      return stateRows.filter(r => r.ym === m).reduce((a,r)=>a+r.retail,0);
+    });
+    rows.push({
+      type: 'state', state: s, oem: null,
+      values: stateTotals,
+      rowTotal: stateTotals.reduce((a,b)=>a+b,0)
+    });
+    for (const o of topOems) {
+      const values = months.map(m => vol.get(s+'|'+o+'|'+m) || 0);
+      rows.push({
+        type: 'oem', state: s, oem: o, values,
+        rowTotal: values.reduce((a,b)=>a+b,0)
+      });
+    }
+  }
+  return { months, rows, metric, volOemAllYM, volStateAllYM };
+}
+
+function renderMatrix() {
+  if (!rawData.length) { document.getElementById('matrixWrap').innerHTML = '<div class="no-data">Upload data to see the matrix.</div>'; return; }
+  const built = buildMatrix();
+  const { months, rows, metric, volOemAllYM, volStateAllYM } = built;
+  if (!months.length) { document.getElementById('matrixWrap').innerHTML = '<div class="no-data">No data for current filters.</div>'; return; }
+
+  const valueFor = (row, i, months) => {
+    const cur = row.values[i];
+    if (metric === 'retail') return cur;
+    if (metric === 'mom') {
+      if (i === 0) return null;
+      const prev = row.values[i-1];
+      return prev ? ((cur - prev) / prev) * 100 : null;
+    }
+    if (metric === 'yoy') {
+      const curMonth = months[i];
+      const [y,m] = curMonth.split('-').map(Number);
+      const prevKey = (y-1)+'-'+String(m).padStart(2,'0');
+      // Use the full-history prior-year lookups so YoY works even with a year filter.
+      let prev;
+      if (row.type === 'state') prev = volStateAllYM.get(row.state + '|' + prevKey);
+      else prev = volOemAllYM.get(row.state + '|' + row.oem + '|' + prevKey);
+      if (prev == null) return null;
+      return prev ? ((cur - prev) / prev) * 100 : null;
+    }
+  };
+  const fmtVal = (v) => {
+    if (v == null || (typeof v === 'number' && !isFinite(v))) return '—';
+    if (metric === 'retail') return fmtNum(v);
+    return (v>=0?'+':'') + v.toFixed(1) + '%';
+  };
+  const cellClass = (v) => {
+    if (metric === 'retail' || v == null) return '';
+    return v >= 0 ? 'delta-up' : 'delta-down';
+  };
+
+  const hdr = '<thead><tr>' +
+    '<th class="group-hdr">State</th>' +
+    '<th class="group-hdr group-hdr-oem">OEM</th>' +
+    months.map(m => `<th>${prettyYM(m)}</th>`).join('') +
+    '</tr></thead>';
+  const body = rows.map(r => {
+    const cells = r.values.map((_, i) => {
+      const v = valueFor(r, i, months);
+      return `<td class="${cellClass(v)}">${fmtVal(v)}</td>`;
+    }).join('');
+    if (r.type === 'state') {
+      // Keep 2 separate left columns so sticky offsets align cleanly. The second column
+      // shows the row's retail-volume sum across all visible months (always retail units,
+      // regardless of the displayed metric — gives quick scale at a glance).
+      return `<tr class="state-row"><td class="group-cell">${r.state}</td><td class="group-cell group-cell-oem" title="State total across visible months">${fmtCompact(r.rowTotal)}</td>${cells}</tr>`;
+    }
+    return `<tr><td class="group-cell"></td><td class="group-cell group-cell-oem">${r.oem}</td>${cells}</tr>`;
+  }).join('');
+
+  document.getElementById('matrixWrap').innerHTML = `<table class="matrix">${hdr}<tbody>${body}</tbody></table>`;
+}
+
+function exportMatrix() {
+  if (!rawData.length) return;
+  const { months, rows, metric, volOemAllYM, volStateAllYM } = buildMatrix();
+  const valueFor = (row, i) => {
+    const cur = row.values[i];
+    if (metric === 'retail') return cur;
+    if (metric === 'mom') { if (i === 0) return null; const prev = row.values[i-1]; return prev ? ((cur-prev)/prev)*100 : null; }
+    if (metric === 'yoy') {
+      const [y,m] = months[i].split('-').map(Number);
+      const pk = (y-1)+'-'+String(m).padStart(2,'0');
+      const prev = row.type === 'state' ? volStateAllYM.get(row.state+'|'+pk) : volOemAllYM.get(row.state+'|'+row.oem+'|'+pk);
+      if (prev == null) return null;
+      return prev ? ((cur-prev)/prev)*100 : null;
+    }
+  };
+  const header = ['State','OEM', ...months.map(prettyYM)];
+  const lines = [header.join(',')];
+  for (const r of rows) {
+    const vals = r.values.map((_, i) => {
+      const v = valueFor(r, i);
+      if (v == null) return '';
+      return metric === 'retail' ? Math.round(v) : v.toFixed(2);
+    });
+    const st = '"' + r.state + '"';
+    const oe = r.type === 'state'
+      ? '"TOTAL: ' + Math.round(r.rowTotal).toLocaleString('en-IN') + '"'
+      : '"' + (r.oem||'') + '"';
+    lines.push([st, oe, ...vals].join(','));
+  }
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'bikedekho_matrix_' + metric + '_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  toast('Exported matrix (' + metric + ')');
+}
+
+</script>
+</body>
+</html>
