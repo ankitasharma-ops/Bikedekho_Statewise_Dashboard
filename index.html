@@ -1632,21 +1632,38 @@ function renderPage1() {
 
 function renderKPIs() {
   const total = filteredTotals.reduce((a,r) => a + r.retail, 0);
-  // MoM & YoY: full time series; ignore year/month filters; respect state/oem/fuel
+  // MoM & YoY: full time series; ignore year/month filters; respect state/oem/fuel.
+  // The "current" month is whatever the user picked in the To dropdown; if they
+  // left it at "latest" we fall back to the most recent month in the dataset.
+  // This way the MoM card always reflects the user's selected To-month.
   const hasTotalTag = rawData.some(r => r.isTotal);
   const baseForTrend = filterRows({ skipTime: true })
     .filter(r => filters.fuel.length || !hasTotalTag || r.isTotal);
   const byMonth = new Map();
   for (const r of baseForTrend) byMonth.set(r.ym, (byMonth.get(r.ym)||0) + r.retail);
-  const months = [...byMonth.keys()].sort();
-  const last = months[months.length-1];
-  const prev = months[months.length-2];
-  const mom = (last && prev && byMonth.get(prev)) ? ((byMonth.get(last)-byMonth.get(prev))/byMonth.get(prev))*100 : null;
-  let yoy = null;
+  const allMonthsSorted = [...byMonth.keys()].sort();
+  // Anchor = the user's To-month (or, if they left it empty, the latest month
+  // present in the filtered data).
+  const last = filters.toYm || allMonthsSorted[allMonthsSorted.length-1];
+  // Calendar previous month — handles year boundary (Jan → previous Dec)
+  let momPrev = null;
+  if (last) {
+    const [ly, lm] = last.split('-').map(Number);
+    const pm = lm === 1 ? 12 : lm - 1;
+    const py = lm === 1 ? ly - 1 : ly;
+    momPrev = py + '-' + String(pm).padStart(2,'0');
+  }
+  const mom = (last && momPrev && byMonth.has(last) && byMonth.has(momPrev) && byMonth.get(momPrev))
+    ? ((byMonth.get(last) - byMonth.get(momPrev)) / byMonth.get(momPrev)) * 100
+    : null;
+  // YoY: same calendar month one year earlier
+  let yoy = null, yoyPrev = null;
   if (last) {
     const [y,m] = last.split('-').map(Number);
-    const ly = (y-1)+'-'+String(m).padStart(2,'0');
-    if (byMonth.has(ly)) yoy = ((byMonth.get(last)-byMonth.get(ly))/byMonth.get(ly))*100;
+    yoyPrev = (y-1)+'-'+String(m).padStart(2,'0');
+    if (byMonth.has(last) && byMonth.has(yoyPrev) && byMonth.get(yoyPrev)) {
+      yoy = ((byMonth.get(last) - byMonth.get(yoyPrev)) / byMonth.get(yoyPrev)) * 100;
+    }
   }
   // EV penetration: ev (EV-only rows) over total (ALL FUEL rows). Ignore the fuel filter
   // for this metric — a "fuel = EV" filter would otherwise force 100%.
@@ -1660,10 +1677,19 @@ function renderKPIs() {
   const byOem = aggBy(filteredTotals, r => r.oem);
   const topOem = sortedMapEntries(byOem)[0] || ['—', 0];
 
+  // Sub-line for the growth KPIs makes both the anchor and the comparison month
+  // explicit, with the comparison month in brackets so it's instantly clear what
+  // the percentage was measured against.
+  const momLabel = (last && momPrev)
+    ? prettyYM(last) + ' (vs ' + prettyYM(momPrev) + ')'
+    : '';
+  const yoyLabel = (last && yoyPrev)
+    ? prettyYM(last) + ' (vs ' + prettyYM(yoyPrev) + ')'
+    : '';
   const kpis = [
     { label: 'Total Retail', value: fmtCompact(total), sub: fmtNum(total) + ' units' },
-    { label: 'MoM Growth', value: fmtPct(mom), deltaVal: mom, sub: prev ? 'vs ' + prettyYM(prev) : '' },
-    { label: 'YoY Growth', value: fmtPct(yoy), deltaVal: yoy, sub: last ? 'vs same month LY' : '' },
+    { label: 'MoM Growth', value: fmtPct(mom), deltaVal: mom, sub: momLabel },
+    { label: 'YoY Growth', value: fmtPct(yoy), deltaVal: yoy, sub: yoyLabel },
     { label: 'EV Penetration', value: fmtPct(evPct), sub: fmtCompact(ev) + ' EV units' },
     { label: 'Top OEM', value: topOem[0], sub: fmtCompact(topOem[1]) + ' units' },
   ];
