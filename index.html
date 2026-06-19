@@ -1480,7 +1480,14 @@ function filterRows(opts = {}) {
 }
 
 function applyFilters() {
-  const base = filterRows();
+  const baseAll = filterRows();
+  // CRITICAL: drop "Pan India" aggregate rows from the global filtered view.
+  // Vahan exports ship a Pan India row alongside the state rows; if we include
+  // it in any sum, every total doubles. State-level rows on their own already
+  // add up to the all-India number — so excluding Pan India gives correct totals.
+  // The State Retail Trend chart re-fetches Pan India directly from rawData when
+  // its "Show Pan India" toggle is on, so that comparison line is still available.
+  const base = baseAll.filter(r => !isPanIndiaState(r.state));
   const hasTotalTag = rawData.some(r => r.isTotal);
   if (filters.fuel.length) {
     // User picked specific fuel(s) → don't double-bucket
@@ -2630,17 +2637,41 @@ function isPanIndiaState(s) {
 }
 function renderStateTrend() {
   const showPan = !!chartSlicers.stateTrend.panIndia;
-  // Top 6 by retail volume. By default we filter out the "Pan India" aggregate row
-  // since it'd dominate any state-level ranking.
+  // Top 6 by retail volume. Pan India is no longer in filteredTotals (it'd inflate
+  // every sum), so we don't need to filter it out here.
   const byState = aggBy(filteredTotals, r => r.state);
-  const entries = sortedMapEntries(byState).filter(([s]) => showPan || !isPanIndiaState(s));
-  const topStates = entries.slice(0, 6).map(e => e[0]);
+  const topStates = sortedMapEntries(byState).slice(0, 6).map(e => e[0]);
   const months = allMonthKeys(filteredTotals);
   const labels = months.map(prettyYM);
   const datasets = topStates.map((s, i) => {
     const data = months.map(m => filteredTotals.filter(r => r.ym===m && r.state===s).reduce((a,r)=>a+r.retail,0));
     return { label: s, data, borderColor: PALETTE[i%PALETTE.length], backgroundColor: PALETTE[i%PALETTE.length]+'22', fill: false, tension: 0.3, borderWidth: 2, pointRadius: 1.5, pointHoverRadius: 4 };
   });
+
+  // Optional Pan India series — re-fetched directly from rawData since the row is
+  // excluded from the global filtered view. Respects every filter except state.
+  if (showPan) {
+    const hasTotalTag = rawData.some(r => r.isTotal);
+    const panRows = rawData.filter(r => {
+      if (!isPanIndiaState(r.state)) return false;
+      if (!passesYearMonth(r)) return false;
+      if (!passesOem(r) || !passesFuel(r)) return false;
+      if (!filters.fuel.length && hasTotalTag && !r.isTotal) return false;
+      return true;
+    });
+    if (panRows.length) {
+      const data = months.map(m => panRows.filter(r => r.ym === m).reduce((a,r)=>a+r.retail,0));
+      datasets.push({
+        label: 'Pan India',
+        data,
+        borderColor: '#1A1D23',
+        backgroundColor: 'rgba(26,29,35,0.08)',
+        borderDash: [6, 4],         // dashed = "reference / sum-of-all" series
+        fill: false, tension: 0.3, borderWidth: 2.5,
+        pointRadius: 2, pointHoverRadius: 5
+      });
+    }
+  }
   charts.stateTrend = new Chart(document.getElementById('c_stateTrend'), {
     type: 'line',
     data: { labels, datasets },
