@@ -3002,9 +3002,8 @@ function renderMatrix() {
     }).join('');
     if (r.type === 'state') {
       // Keep 2 separate left columns so sticky offsets align cleanly. The second column
-      // shows the row's retail-volume sum across all visible months (always retail units,
-      // regardless of the displayed metric — gives quick scale at a glance).
-      return `<tr class="state-row"><td class="group-cell">${r.state}</td><td class="group-cell group-cell-oem" title="State total across visible months">${fmtCompact(r.rowTotal)}</td>${cells}</tr>`;
+      // labels the row as the state's roll-up across all OEMs.
+      return `<tr class="state-row"><td class="group-cell">${r.state}</td><td class="group-cell group-cell-oem">Total</td>${cells}</tr>`;
     }
     return `<tr><td class="group-cell"></td><td class="group-cell group-cell-oem">${r.oem}</td>${cells}</tr>`;
   }).join('');
@@ -3036,9 +3035,7 @@ function exportMatrix() {
       return metric === 'retail' ? Math.round(v) : v.toFixed(2);
     });
     const st = '"' + r.state + '"';
-    const oe = r.type === 'state'
-      ? '"TOTAL: ' + Math.round(r.rowTotal).toLocaleString('en-IN') + '"'
-      : '"' + (r.oem||'') + '"';
+    const oe = r.type === 'state' ? '"Total"' : '"' + (r.oem||'') + '"';
     lines.push([st, oe, ...vals].join(','));
   }
   const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
