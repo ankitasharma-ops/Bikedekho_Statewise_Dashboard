@@ -845,6 +845,35 @@ function parseCombinedMonth(raw) {
 function meltWideRows(rows, spec, oemMap) {
   const out = [];
   const hasMap = oemMap && oemMap.size > 0;
+
+  // Figure out which canonical buckets the spec exposes. Used below to synthesise
+  // any missing bucket as the residual of ALL FUEL − the present buckets.
+  const isAll = (s) => /^all\s*fuel$/i.test(s);
+  const isEV  = (s) => /^(pure\s*)?ev$/i.test(s);
+  const isICE = (s) => /^ice\b/i.test(s);
+  const isCNG = (s) => /^cng\b/i.test(s);
+  const findCol = (pred) => spec.fuelCols.find(fc => pred(fc.toString().trim()));
+  const allFuelCol = findCol(isAll);
+  const evCol      = findCol(isEV);
+  const iceCol     = findCol(isICE);
+  const cngCol     = findCol(isCNG);
+  // We can fill in any single missing slot from the residual when ALL FUEL is present.
+  // (Doing it for more than one missing slot would be ambiguous — skip in that case.)
+  const presentBuckets = [evCol, iceCol, cngCol].filter(Boolean).length;
+  const canSynth = spec.mode === 'derived' && allFuelCol && presentBuckets === 2;
+  const missingName = !evCol ? 'EV' : !iceCol ? 'ICE' : !cngCol ? 'CNG' : null;
+  if (canSynth) {
+    console.log('meltWideRows: synthesising missing "' + missingName + '" bucket from ALL FUEL residual');
+  }
+
+  const parseNum = (raw) => {
+    if (raw == null || raw === '') return null;
+    let v = raw;
+    if (typeof v === 'string') v = v.replace(/[,\s₹]/g, '');
+    v = +v;
+    return isFinite(v) ? v : null;
+  };
+
   for (const r of rows) {
     const parsed = parseCombinedMonth(r[spec.monthCol]);
     if (!parsed || !parsed.year || !parsed.month) continue;
@@ -857,22 +886,34 @@ function meltWideRows(rows, spec, oemMap) {
     } else {
       oem = rawOem || 'Unknown';
     }
+    const baseRow = {
+      year: parsed.year, month: parsed.month,
+      ym: ym(parsed.year, parsed.month),
+      state, oem
+    };
+
+    // Emit a row per present fuel column
+    let allVal = null, evVal = 0, iceVal = 0, cngVal = 0;
     for (const fc of spec.fuelCols) {
-      let v = r[fc];
-      if (v == null || v === '') continue;
-      if (typeof v === 'string') v = v.replace(/[,\s₹]/g, '');
-      v = +v;
-      if (!isFinite(v) || v === 0) continue;
+      const v = parseNum(r[fc]);
+      if (v == null || v === 0) continue;
       const fuelName = fc.toString().trim();
-      const isTotal = /^all\s*fuel$/i.test(fuelName);
-      out.push({
-        year: parsed.year, month: parsed.month,
-        ym: ym(parsed.year, parsed.month),
-        state, oem,
-        fuel: fuelName,
-        isTotal,
-        retail: v
-      });
+      const isTotal = isAll(fuelName);
+      if (isTotal)        allVal = v;
+      else if (isEV(fuelName))  evVal  = v;
+      else if (isICE(fuelName)) iceVal = v;
+      else if (isCNG(fuelName)) cngVal = v;
+      out.push({ ...baseRow, fuel: fuelName, isTotal, retail: v });
+    }
+
+    // Synthesise the missing bucket so EV vs ICE / Fuel Split charts stay correct
+    // even when the source file omits one of EV / ICE / CNG.
+    if (canSynth && allVal != null) {
+      const sumPresent = evVal + iceVal + cngVal;
+      const residual = allVal - sumPresent;
+      if (residual > 0) {
+        out.push({ ...baseRow, fuel: missingName, isTotal: false, retail: residual });
+      }
     }
   }
   return out;
@@ -1717,27 +1758,61 @@ function renderRetailTrend() {
 }
 
 function renderEvTrend() {
-  // Ignore the fuel filter for this trend — a "fuel = EV" filter would force 100% line.
+  // Two modes depending on whether the user has narrowed by OEM:
+  //   • No OEM filter  → classic EV PENETRATION: EV retail / total retail per month.
+  //   • OEM filter set → EV-INDUSTRY SHARE: selected OEM's EV / total industry EV
+  //                       per month. Tells you the brand's share of all EV sales.
+  // We always ignore the Fuel filter — picking "Fuel = EV" would otherwise force
+  // both numerator and denominator to be EV and the line would flat-line at 100%.
   const hasTotalTag = rawData.some(r => r.isTotal);
-  const evBase = filterRows({ skipFuel: true });
-  const byMonthTotal = new Map();
+  const oemFilterOn = filters.oem.length > 0;
+  const isEvRow = (r) => !r.isTotal && (r.fuel.toUpperCase() === 'EV' || isEV(r.fuel));
+  // Helper that strips Pan India + applies the totals-view rule for the denominator.
+  const useTotalForDenom = (r) => hasTotalTag ? r.isTotal : true;
+
+  // EV NUMERATOR — always respects every active filter (including OEM)
+  const numRows = filterRows({ skipFuel: true }).filter(r => !isPanIndiaState(r.state));
   const byMonthEV = new Map();
-  for (const r of evBase) {
-    if (hasTotalTag && r.isTotal) {
-      byMonthTotal.set(r.ym, (byMonthTotal.get(r.ym)||0)+r.retail);
-    } else if (!hasTotalTag) {
-      byMonthTotal.set(r.ym, (byMonthTotal.get(r.ym)||0)+r.retail);
-    }
-    if (!r.isTotal && (r.fuel.toUpperCase() === 'EV' || isEV(r.fuel))) {
-      byMonthEV.set(r.ym, (byMonthEV.get(r.ym)||0)+r.retail);
+  for (const r of numRows) {
+    if (isEvRow(r)) byMonthEV.set(r.ym, (byMonthEV.get(r.ym)||0)+r.retail);
+  }
+
+  // DENOMINATOR — in OEM-share mode this is industry-wide EV (skip OEM filter);
+  // in penetration mode this is industry-wide total retail.
+  const denomRows = filterRows({ skipFuel: true, skipOem: oemFilterOn }).filter(r => !isPanIndiaState(r.state));
+  const byMonthDenom = new Map();
+  for (const r of denomRows) {
+    if (oemFilterOn) {
+      // Industry EV total → only EV rows, regardless of OEM
+      if (isEvRow(r)) byMonthDenom.set(r.ym, (byMonthDenom.get(r.ym)||0)+r.retail);
+    } else {
+      // Industry retail total → ALL FUEL roll-up (or all rows when no totals tag)
+      if (useTotalForDenom(r)) byMonthDenom.set(r.ym, (byMonthDenom.get(r.ym)||0)+r.retail);
     }
   }
-  const months = [...byMonthTotal.keys()].sort();
+
+  const months = [...new Set([...byMonthEV.keys(), ...byMonthDenom.keys()])].sort();
   const labels = months.map(prettyYM);
-  const data = months.map(m => byMonthTotal.get(m) ? (byMonthEV.get(m)||0)/byMonthTotal.get(m)*100 : 0);
+  const data = months.map(m => {
+    const d = byMonthDenom.get(m) || 0;
+    return d ? ((byMonthEV.get(m)||0) / d) * 100 : 0;
+  });
+  const seriesLabel = oemFilterOn
+    ? (filters.oem.length === 1 ? filters.oem[0] + ' EV share %' : filters.oem.length + ' OEMs EV share %')
+    : 'EV penetration %';
+
+  // Update the card subtitle so the user knows which formula is active
+  const sub = document.querySelector('#c_evTrend')
+    ? document.querySelector('#c_evTrend').closest('.card').querySelector('.card-subtitle')
+    : null;
+  if (sub) {
+    sub.textContent = oemFilterOn
+      ? 'Selected OEM EV ÷ total industry EV (% of EV market held by this brand)'
+      : 'EV retail ÷ total retail (% of all 2W sales that are EV)';
+  }
+
   const opts = lineOpts('%', v => v.toFixed(1)+'%');
-  // EV-Penetration-specific: data labels show the percentage with a "%" suffix,
-  // and inherit the line's green colour.
+  // Data labels show the percentage with a "%" suffix and inherit the line's green colour.
   opts.plugins = opts.plugins || {};
   opts.plugins.datalabels = {
     formatter: v => (typeof v === 'number' ? v.toFixed(1) + '%' : ''),
@@ -1745,7 +1820,7 @@ function renderEvTrend() {
   };
   charts.evTrend = new Chart(document.getElementById('c_evTrend'), {
     type: 'line',
-    data: { labels, datasets: [{ label: 'EV %', data, borderColor: '#06A77D', backgroundColor: 'rgba(6,167,125,0.12)', fill: true, tension: 0.35, borderWidth: 2.5, pointRadius: 2, pointHoverRadius: 5 }]},
+    data: { labels, datasets: [{ label: seriesLabel, data, borderColor: '#06A77D', backgroundColor: 'rgba(6,167,125,0.12)', fill: true, tension: 0.35, borderWidth: 2.5, pointRadius: 2, pointHoverRadius: 5 }]},
     options: opts
   });
 }
