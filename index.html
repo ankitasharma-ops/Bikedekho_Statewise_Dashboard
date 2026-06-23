@@ -1706,14 +1706,33 @@ function renderKPIs() {
       yoy = ((byMonth.get(last) - byMonth.get(yoyPrev)) / byMonth.get(yoyPrev)) * 100;
     }
   }
-  // EV penetration: ev (EV-only rows) over total (ALL FUEL rows). Ignore the fuel filter
-  // for this metric — a "fuel = EV" filter would otherwise force 100%.
-  const evBase = filterRows({ skipFuel: true });
-  const ev = evBase.filter(r => r.fuel.toUpperCase() === 'EV' || isEV(r.fuel)).reduce((a,r)=>a+r.retail,0);
-  const evDenom = hasTotalTag
-    ? evBase.filter(r => r.isTotal).reduce((a,r)=>a+r.retail,0)
-    : evBase.reduce((a,r)=>a+r.retail,0);
+  // EV Penetration KPI — same dual-mode as the EV Penetration Trend chart:
+  //   • No OEM filter  → EV retail / total retail (% of all 2W sales that are EV)
+  //   • OEM filter set → selected OEM EV / total industry EV (brand's share of EV market)
+  // Fuel filter is ignored either way (else picking "Fuel = EV" forces 100%).
+  const oemFilterOn = filters.oem.length > 0;
+  const isEvRow = (r) => !r.isTotal && (r.fuel.toUpperCase() === 'EV' || isEV(r.fuel));
+  // Numerator — always respects the OEM filter (and every other filter)
+  const evNumBase = filterRows({ skipFuel: true }).filter(r => !isPanIndiaState(r.state));
+  const ev = evNumBase.filter(isEvRow).reduce((a,r)=>a+r.retail,0);
+  // Denominator — in OEM-share mode, skip the OEM filter so it's the industry pool
+  const evDenomBase = filterRows({ skipFuel: true, skipOem: oemFilterOn }).filter(r => !isPanIndiaState(r.state));
+  let evDenom;
+  if (oemFilterOn) {
+    // Share-of-EV-industry mode → denominator is whole-industry EV retail
+    evDenom = evDenomBase.filter(isEvRow).reduce((a,r)=>a+r.retail,0);
+  } else {
+    // Penetration mode → denominator is whole-industry total retail
+    evDenom = hasTotalTag
+      ? evDenomBase.filter(r => r.isTotal).reduce((a,r)=>a+r.retail,0)
+      : evDenomBase.reduce((a,r)=>a+r.retail,0);
+  }
   const evPct = evDenom ? (ev/evDenom)*100 : null;
+  // KPI label + sub-line track the active mode so the user knows what's being computed
+  const evKpiLabel = oemFilterOn ? 'EV Market Share' : 'EV Penetration';
+  const evKpiSub   = oemFilterOn
+    ? fmtCompact(ev) + ' / ' + fmtCompact(evDenom) + ' industry EV'
+    : fmtCompact(ev) + ' EV units';
   // Top OEM (use totals view to avoid double-count from EV+ICE+CNG)
   const byOem = aggBy(filteredTotals, r => r.oem);
   const topOem = sortedMapEntries(byOem)[0] || ['—', 0];
@@ -1731,7 +1750,7 @@ function renderKPIs() {
     { label: 'Total Retail', value: fmtCompact(total), sub: fmtNum(total) + ' units' },
     { label: 'MoM Growth', value: fmtPct(mom), deltaVal: mom, sub: momLabel },
     { label: 'YoY Growth', value: fmtPct(yoy), deltaVal: yoy, sub: yoyLabel },
-    { label: 'EV Penetration', value: fmtPct(evPct), sub: fmtCompact(ev) + ' EV units' },
+    { label: evKpiLabel, value: fmtPct(evPct), sub: evKpiSub },
     { label: 'Top OEM', value: topOem[0], sub: fmtCompact(topOem[1]) + ' units' },
   ];
   document.getElementById('kpis').innerHTML = kpis.map(k => {
