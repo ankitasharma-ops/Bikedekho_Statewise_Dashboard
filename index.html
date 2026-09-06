@@ -245,6 +245,42 @@
   .auto-load-status p  { font-size: 13px; color: var(--text-muted); }
   @keyframes cb_spin { to { transform: rotate(360deg); } }
 
+  /* Insights tab */
+  .insights-section { margin-bottom: 26px; }
+  .insights-section-title { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 4px; letter-spacing: -0.01em; }
+  .insights-subtitle { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; font-style: italic; }
+  .insights-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+  .insight {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    box-shadow: var(--shadow);
+    border-left: 4px solid var(--primary);
+    display: flex; flex-direction: column; gap: 4px;
+    min-height: 120px;
+  }
+  .insight.green { border-left-color: var(--success); }
+  .insight.amber { border-left-color: var(--accent); }
+  .insight.red   { border-left-color: var(--danger); }
+  .insight.blue  { border-left-color: #118AB2; }
+  .insight.grey  { border-left-color: #94A3B8; }
+  .insight-label { font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+  .insight-headline { font-size: 17px; font-weight: 700; color: var(--text); letter-spacing: -0.01em; word-break: break-word; }
+  .insight-headline .pct { color: var(--primary); }
+  .insight-headline .pct.up { color: var(--success); }
+  .insight-headline .pct.down { color: var(--danger); }
+  .insight-detail { font-size: 13px; color: var(--text-muted); line-height: 1.45; margin-top: auto; padding-top: 6px; }
+  /* Compact list used inside "Movers" cards for per-OEM rows */
+  .insight-list { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; font-size: 12.5px; color: var(--text); }
+  .insight-list .row { display: flex; align-items: center; gap: 8px; }
+  .insight-list .name { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .insight-list .num { color: var(--text-muted); font-weight: 500; min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+  .insight-list .arrow { font-weight: 700; min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
+  .insight-list .arrow.up   { color: var(--success); }
+  .insight-list .arrow.down { color: var(--danger); }
+  .insight-list .arrow.eq   { color: var(--text-muted); }
+  .insight-tall { min-height: 200px; }
+
   /* Empty states */
   .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); background: white; border-radius: var(--radius); box-shadow: var(--shadow); }
   .empty-state .big { font-size: 44px; margin-bottom: 10px; }
@@ -311,6 +347,7 @@
     <button class="tab" data-page="2">OEM Analysis</button>
     <button class="tab" data-page="3">State Analysis</button>
     <button class="tab" data-page="4">Matrix Table</button>
+    <button class="tab" data-page="5">Insights</button>
   </div>
 </nav>
 </div>
@@ -517,6 +554,28 @@
       <div class="matrix-wrap" id="matrixWrap">
         <div class="no-data">Upload data to see the matrix.</div>
       </div>
+    </div>
+  </section>
+
+  <!-- =============================  PAGE 5: INSIGHTS  ============================ -->
+  <section class="page" id="page5">
+    <div class="insights-section">
+      <h3 class="insights-section-title">Snapshot</h3>
+      <div class="insights-grid" id="insights_snapshot"></div>
+    </div>
+    <div class="insights-section">
+      <h3 class="insights-section-title">What's moving</h3>
+      <div class="insights-subtitle" id="insights_movement_period">Selected period vs the same span one year earlier.</div>
+      <div class="insights-grid" id="insights_movement"></div>
+    </div>
+    <div class="insights-section">
+      <h3 class="insights-section-title">Structure</h3>
+      <div class="insights-grid" id="insights_structure"></div>
+    </div>
+    <div class="insights-section">
+      <h3 class="insights-section-title">Movers</h3>
+      <div class="insights-subtitle" id="insights_movers_period">Rank &amp; share shifts across the selected window.</div>
+      <div class="insights-grid" id="insights_movers"></div>
     </div>
   </section>
 
@@ -1581,7 +1640,390 @@ function renderCurrentPage() {
   else if (currentPage === 2) renderPage2();
   else if (currentPage === 3) renderPage3();
   else if (currentPage === 4) renderPage4();
+  else if (currentPage === 5) renderPage5();
   updateAllChips();
+}
+
+function renderPage5() { renderInsights(); }
+
+// ============ PAGE 5: INSIGHTS ============
+// Auto-generated commentary that responds to whatever filters are active.
+function renderInsights() {
+  // Anchor months for YoY-style comparisons (same helpers used by OEM Compare / Waterfall)
+  const months = allMonthKeys(filteredTotals);
+  const { baseYm, endYm } = periodAnchors(months);
+  const hasTotalTag = rawData.some(r => r.isTotal);
+  const fmtPP = (v) => (v >= 0 ? '+' : '') + v.toFixed(1) + ' pp';
+  const fmtPctSigned = (v) => (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+  const isEvRow = (r) => !r.isTotal && (r.fuel.toUpperCase() === 'EV' || isEV(r.fuel));
+
+  // ----- Numbers we'll lean on -----
+  const totalRetail = filteredTotals.reduce((a,r)=>a+r.retail, 0);
+  // Prior-year same-window total — for YoY context
+  const priorMonthSet = new Set(months.map(priorYearYm));
+  const priorRows = rawData.filter(r => {
+    if (!priorMonthSet.has(r.ym)) return false;
+    if (isPanIndiaState(r.state)) return false;
+    if (!passesState(r) || !passesOem(r) || !passesFuel(r)) return false;
+    if (!filters.fuel.length && hasTotalTag && !r.isTotal) return false;
+    return true;
+  });
+  const priorTotal = priorRows.reduce((a,r)=>a+r.retail, 0);
+  const yoyTotalPct = priorTotal ? ((totalRetail - priorTotal) / priorTotal) * 100 : null;
+
+  // Per-OEM aggregates — current vs prior period
+  const byOemCurr = aggBy(filteredTotals, r => r.oem);
+  const byOemPrev = aggBy(priorRows,      r => r.oem);
+  const oemRanking = sortedMapEntries(byOemCurr);
+  const grandTotalCurr = totalRetail;
+  // Per-state aggregates
+  const byStateCurr = aggBy(filteredTotals, r => r.state);
+  const stateRanking = sortedMapEntries(byStateCurr);
+
+  // EV-share per state (uses the split rows) — current period and prior period
+  const splitCurr = filteredData;
+  const evByStateCurr  = aggBy(splitCurr.filter(isEvRow), r => r.state);
+  const totByStateCurr = byStateCurr; // ALL FUEL totals by state
+  const splitPrior = rawData.filter(r => {
+    if (!priorMonthSet.has(r.ym)) return false;
+    if (isPanIndiaState(r.state)) return false;
+    if (!passesState(r) || !passesOem(r) || !passesFuel(r)) return false;
+    return !r.isTotal;
+  });
+  const evByStatePrior  = aggBy(splitPrior.filter(isEvRow), r => r.state);
+  const totByStatePrior = aggBy(priorRows, r => r.state);
+
+  // Industry-wide EV current vs prior (for EV penetration KPI)
+  const evCurr = splitCurr.filter(isEvRow).reduce((a,r)=>a+r.retail, 0);
+  const evPrior = splitPrior.filter(isEvRow).reduce((a,r)=>a+r.retail, 0);
+  const evPctCurr  = totalRetail ? (evCurr  / totalRetail) * 100 : null;
+  const evPctPrior = priorTotal  ? (evPrior / priorTotal)  * 100 : null;
+  const evPpChange = (evPctCurr != null && evPctPrior != null) ? (evPctCurr - evPctPrior) : null;
+
+  // Fuel mix for the window
+  const iceCurr = splitCurr.filter(r => r.fuel.toUpperCase() === 'ICE').reduce((a,r)=>a+r.retail, 0);
+  const cngCurr = splitCurr.filter(r => r.fuel.toUpperCase() === 'CNG').reduce((a,r)=>a+r.retail, 0);
+  const mixBase = iceCurr + evCurr + cngCurr;
+
+  // ----- Card builder -----
+  const card = (cls, label, headline, detail) =>
+    `<div class="insight ${cls}">
+       <div class="insight-label">${label}</div>
+       <div class="insight-headline">${headline}</div>
+       <div class="insight-detail">${detail || '&nbsp;'}</div>
+     </div>`;
+
+  // ===== Section 1 — Snapshot =====
+  const snapshot = [];
+  // Market leader
+  if (oemRanking.length) {
+    const [topOem, topOemVol] = oemRanking[0];
+    const share = grandTotalCurr ? (topOemVol / grandTotalCurr) * 100 : 0;
+    snapshot.push(card(
+      'red',
+      'Market leader',
+      topOem + ' &middot; <span class="pct">' + share.toFixed(1) + '%</span>',
+      fmtCompact(topOemVol) + ' units in the selected window &middot; ranked #1 of ' + oemRanking.length + ' OEMs'
+    ));
+  }
+  // Largest state
+  if (stateRanking.length) {
+    const [topState, topStateVol] = stateRanking[0];
+    const share = grandTotalCurr ? (topStateVol / grandTotalCurr) * 100 : 0;
+    snapshot.push(card(
+      'blue',
+      'Largest state',
+      topState + ' &middot; <span class="pct">' + share.toFixed(1) + '%</span>',
+      fmtCompact(topStateVol) + ' units &middot; biggest of ' + stateRanking.length + ' states in this window'
+    ));
+  }
+  // EV penetration with YoY pp change
+  if (evPctCurr != null) {
+    const ppHtml = (evPpChange != null)
+      ? '<span class="pct ' + (evPpChange >= 0 ? 'up' : 'down') + '">' + fmtPP(evPpChange) + '</span> vs same window last year'
+      : 'no comparable prior-year window';
+    snapshot.push(card(
+      'green',
+      'EV penetration',
+      evPctCurr.toFixed(1) + '%',
+      fmtCompact(evCurr) + ' EV units &middot; ' + ppHtml
+    ));
+  }
+  // Total retail with YoY
+  if (totalRetail > 0) {
+    const yoyHtml = (yoyTotalPct != null)
+      ? '<span class="pct ' + (yoyTotalPct >= 0 ? 'up' : 'down') + '">' + fmtPctSigned(yoyTotalPct) + '</span> vs same window last year'
+      : 'no comparable prior-year window';
+    snapshot.push(card(
+      'grey',
+      'Total retail',
+      fmtCompact(totalRetail) + ' units',
+      yoyHtml
+    ));
+  }
+
+  // ===== Section 2 — What's moving =====
+  // All comparisons happen INSIDE the selected window: From-month (baseYm) vs To-month
+  // (endYm). No prior-year comparison. Empty window → skip section.
+  const movement = [];
+  const byOemBase = new Map(), byOemEnd = new Map();
+  for (const r of filteredTotals) {
+    if (r.ym === baseYm) byOemBase.set(r.oem, (byOemBase.get(r.oem)||0) + r.retail);
+    if (r.ym === endYm)  byOemEnd .set(r.oem, (byOemEnd .get(r.oem)||0) + r.retail);
+  }
+  const oemDeltas = [];
+  const allOemsInWindow = new Set([...byOemBase.keys(), ...byOemEnd.keys()]);
+  for (const o of allOemsInWindow) {
+    const cur = byOemEnd.get(o)  || 0;     // To-month volume
+    const prv = byOemBase.get(o) || 0;     // From-month volume
+    oemDeltas.push({
+      oem: o,
+      cur, prv,
+      delta: cur - prv,
+      pct: prv ? ((cur - prv) / prv) * 100 : null
+    });
+  }
+  // Need a meaningful denominator for "fastest grower" — use the larger of the two months
+  const endMonthGrandTotal = [...byOemEnd.values()].reduce((a,b)=>a+b, 0);
+  const minVol = Math.max(endMonthGrandTotal, totalRetail / Math.max(1, months.length)) * 0.005;
+  const minVolFilter = (d) => d.cur >= minVol;
+  // Fastest grower by % within window
+  const eligibleGrow = oemDeltas.filter(d => d.pct != null && minVolFilter(d));
+  eligibleGrow.sort((a,b) => (b.pct||0) - (a.pct||0));
+  if (eligibleGrow.length && eligibleGrow[0].pct > 0) {
+    const top = eligibleGrow[0];
+    movement.push(card(
+      'green',
+      'Fastest-growing OEM',
+      top.oem + ' &middot; <span class="pct up">' + fmtPctSigned(top.pct) + '</span>',
+      'Gained ' + fmtCompact(top.delta) + ' units &middot; ' + fmtCompact(top.prv) + ' &rarr; ' + fmtCompact(top.cur)
+    ));
+  }
+  // Biggest absolute gainer
+  const eligibleAbs = oemDeltas.filter(d => d.delta > 0 && minVolFilter(d));
+  eligibleAbs.sort((a,b) => b.delta - a.delta);
+  if (eligibleAbs.length) {
+    const top = eligibleAbs[0];
+    const pct = top.pct != null ? fmtPctSigned(top.pct) : '—';
+    movement.push(card(
+      'amber',
+      'Biggest absolute gainer',
+      top.oem + ' &middot; +' + fmtCompact(top.delta) + ' units',
+      pct + ' &middot; ' + fmtCompact(top.prv) + ' &rarr; ' + fmtCompact(top.cur)
+    ));
+  }
+  // Largest decliner
+  const eligibleDecl = oemDeltas.filter(d => d.delta < 0 && d.prv >= minVol);
+  eligibleDecl.sort((a,b) => a.delta - b.delta);
+  if (eligibleDecl.length) {
+    const top = eligibleDecl[0];
+    const pct = top.pct != null ? fmtPctSigned(top.pct) : '—';
+    movement.push(card(
+      'red',
+      'Largest decliner',
+      top.oem + ' &middot; <span class="pct down">' + pct + '</span>',
+      'Lost ' + fmtCompact(Math.abs(top.delta)) + ' units &middot; ' + fmtCompact(top.prv) + ' &rarr; ' + fmtCompact(top.cur)
+    ));
+  } else if (oemDeltas.length) {
+    movement.push(card(
+      'green',
+      'No declining OEMs',
+      'Every active brand grew in this window',
+      'Period anchors: ' + (baseYm ? prettyYM(baseYm) : '—') + ' &rarr; ' + (endYm ? prettyYM(endYm) : '—')
+    ));
+  }
+  // EV-readiest state — EV share computed across the whole selected window (no YoY)
+  const stateEvShare = [];
+  for (const s of new Set([...evByStateCurr.keys(), ...totByStateCurr.keys()])) {
+    const ev  = evByStateCurr.get(s) || 0;
+    const tot = totByStateCurr.get(s) || 0;
+    if (tot < grandTotalCurr * 0.01) continue;     // ignore states <1% of total
+    stateEvShare.push({ state: s, share: tot ? (ev / tot) * 100 : 0, ev, tot });
+  }
+  stateEvShare.sort((a,b) => b.share - a.share);
+  if (stateEvShare.length) {
+    const top = stateEvShare[0];
+    movement.push(card(
+      'green',
+      'EV-readiest state',
+      top.state + ' &middot; <span class="pct">' + top.share.toFixed(1) + '%</span> EV',
+      fmtCompact(top.ev) + ' EV units of ' + fmtCompact(top.tot) + ' &middot; highest among 1%+ markets'
+    ));
+  }
+
+  // ===== Section 3 — Structure =====
+  const structure = [];
+  // Top 3 OEM concentration
+  if (oemRanking.length >= 3) {
+    const top3 = oemRanking.slice(0, 3);
+    const top3Sum = top3.reduce((a, [, v]) => a + v, 0);
+    const top3Pct = grandTotalCurr ? (top3Sum / grandTotalCurr) * 100 : 0;
+    structure.push(card(
+      'red',
+      'Top 3 OEM concentration',
+      '<span class="pct">' + top3Pct.toFixed(1) + '%</span> of the market',
+      top3.map(([n]) => n).join(' &middot; ') + ' &middot; combined ' + fmtCompact(top3Sum) + ' units'
+    ));
+  }
+  // Top 5 state concentration
+  if (stateRanking.length >= 5) {
+    const top5 = stateRanking.slice(0, 5);
+    const top5Sum = top5.reduce((a, [, v]) => a + v, 0);
+    const top5Pct = grandTotalCurr ? (top5Sum / grandTotalCurr) * 100 : 0;
+    structure.push(card(
+      'blue',
+      'Top 5 state concentration',
+      '<span class="pct">' + top5Pct.toFixed(1) + '%</span> of all retail',
+      top5.map(([n]) => n).join(' &middot; ')
+    ));
+  }
+  // Fuel mix
+  if (mixBase > 0) {
+    const icePct = iceCurr / mixBase * 100;
+    const evPct  = evCurr  / mixBase * 100;
+    const cngPct = cngCurr / mixBase * 100;
+    structure.push(card(
+      'grey',
+      'Fuel mix',
+      'ICE ' + icePct.toFixed(1) + '% &middot; EV ' + evPct.toFixed(1) + '% &middot; CNG ' + cngPct.toFixed(1) + '%',
+      'Total split across all 2W retail in this window'
+    ));
+  }
+
+  // ----- Period subtitle for "What's moving" -----
+  // Comparisons happen inside the selected window: From-month vs To-month. Single-
+  // month windows show just one month.
+  const periodSub = document.getElementById('insights_movement_period');
+  if (periodSub) {
+    if (baseYm && endYm) {
+      if (baseYm === endYm) {
+        periodSub.innerHTML = 'Within <b>' + prettyYM(baseYm) + '</b> (single month — pick a wider From / To window to see movement).';
+      } else {
+        periodSub.innerHTML = 'Within the selected window: <b>' + prettyYM(baseYm) + '</b> &rarr; <b>' + prettyYM(endYm) + '</b>';
+      }
+    } else {
+      periodSub.textContent = 'Compares the From-month vs the To-month inside the selected window.';
+    }
+  }
+
+  // ===== Section 4 — Movers =====
+  // Rank / share shifts + EV growth contribution across the selected window.
+  const movers = [];
+
+  // Per-OEM volumes at the two anchors (byOemBase / byOemEnd already built above)
+  const totalBase = [...byOemBase.values()].reduce((a,b)=>a+b, 0);
+  const totalEnd  = [...byOemEnd.values()].reduce((a,b)=>a+b, 0);
+  // Ranked lists at each anchor (biggest first)
+  const rankedBase = [...byOemBase.entries()].sort((a,b) => b[1] - a[1]);
+  const rankedEnd  = [...byOemEnd.entries()].sort((a,b) => b[1] - a[1]);
+  const rankOfBase = new Map(rankedBase.map((e,i) => [e[0], i+1]));
+  const rankOfEnd  = new Map(rankedEnd.map((e,i) => [e[0], i+1]));
+
+  // ---- Card A: Rank changes for top 5 (by end-month volume) ----
+  if (rankedEnd.length && totalEnd > 0 && baseYm && endYm && baseYm !== endYm) {
+    const top5 = rankedEnd.slice(0, 5);
+    const rows = top5.map(([oem]) => {
+      const eRank = rankOfEnd.get(oem);
+      const bRank = rankOfBase.get(oem) || null;
+      let arrow, cls;
+      if (bRank == null) { arrow = 'NEW'; cls = 'up'; }
+      else if (bRank === eRank) { arrow = '='; cls = 'eq'; }
+      else if (bRank > eRank)   { arrow = '&uarr; ' + (bRank - eRank); cls = 'up'; }
+      else                       { arrow = '&darr; ' + (eRank - bRank); cls = 'down'; }
+      return `<div class="row">
+        <span class="num">#${eRank}</span>
+        <span class="name">${oem}</span>
+        <span class="arrow ${cls}">${arrow}</span>
+      </div>`;
+    }).join('');
+    movers.push(
+      `<div class="insight amber insight-tall">
+         <div class="insight-label">Rank changes &middot; top 5</div>
+         <div class="insight-headline" style="font-size: 14px;">${prettyYM(baseYm)} &rarr; ${prettyYM(endYm)}</div>
+         <div class="insight-list">${rows}</div>
+       </div>`
+    );
+  }
+
+  // ---- Card B: Market-share pp shifts for top 5 (by end-month share) ----
+  if (rankedEnd.length && totalEnd > 0 && totalBase > 0 && baseYm && endYm && baseYm !== endYm) {
+    const top5 = rankedEnd.slice(0, 5);
+    const rows = top5.map(([oem, endVol]) => {
+      const baseVol = byOemBase.get(oem) || 0;
+      const endShare  = totalEnd  ? (endVol  / totalEnd)  * 100 : 0;
+      const baseShare = totalBase ? (baseVol / totalBase) * 100 : 0;
+      const pp = endShare - baseShare;
+      const cls = pp > 0.05 ? 'up' : (pp < -0.05 ? 'down' : 'eq');
+      const arrow = (pp > 0 ? '+' : '') + pp.toFixed(1) + ' pp';
+      return `<div class="row">
+        <span class="num">${endShare.toFixed(1)}%</span>
+        <span class="name">${oem}</span>
+        <span class="arrow ${cls}">${arrow}</span>
+      </div>`;
+    }).join('');
+    movers.push(
+      `<div class="insight blue insight-tall">
+         <div class="insight-label">Market-share pp shifts &middot; top 5</div>
+         <div class="insight-headline" style="font-size: 14px;">${prettyYM(baseYm)} &rarr; ${prettyYM(endYm)}</div>
+         <div class="insight-list">${rows}</div>
+       </div>`
+    );
+  }
+
+  // ---- Card C: Contribution to EV growth ----
+  // Sum EV per OEM at the two anchors from the split (EV/ICE/CNG) rows
+  const evByOemBase = new Map(), evByOemEnd = new Map();
+  for (const r of splitCurr) {
+    if (!isEvRow(r)) continue;
+    if (r.ym === baseYm) evByOemBase.set(r.oem, (evByOemBase.get(r.oem)||0) + r.retail);
+    if (r.ym === endYm)  evByOemEnd .set(r.oem, (evByOemEnd .get(r.oem)||0) + r.retail);
+  }
+  const evAllOems = new Set([...evByOemBase.keys(), ...evByOemEnd.keys()]);
+  const evDeltas = [];
+  for (const o of evAllOems) {
+    const b = evByOemBase.get(o) || 0;
+    const e = evByOemEnd.get(o)  || 0;
+    evDeltas.push({ oem: o, base: b, end: e, delta: e - b });
+  }
+  const evDeltaPositive = evDeltas.filter(d => d.delta > 0);
+  const evPositiveSum = evDeltaPositive.reduce((a,d) => a + d.delta, 0);
+  if (evPositiveSum > 0 && baseYm && endYm && baseYm !== endYm) {
+    evDeltaPositive.sort((a,b) => b.delta - a.delta);
+    const top5 = evDeltaPositive.slice(0, 5);
+    const rows = top5.map(d => {
+      const share = (d.delta / evPositiveSum) * 100;
+      return `<div class="row">
+        <span class="num">+${fmtCompact(d.delta)}</span>
+        <span class="name">${d.oem}</span>
+        <span class="arrow up">${share.toFixed(0)}%</span>
+      </div>`;
+    }).join('');
+    const top1Share = (evDeltaPositive[0].delta / evPositiveSum) * 100;
+    const headline = evDeltaPositive[0].oem + ' contributed <span class="pct">' + top1Share.toFixed(0) + '%</span> of EV gains';
+    movers.push(
+      `<div class="insight green insight-tall">
+         <div class="insight-label">Contribution to EV growth</div>
+         <div class="insight-headline" style="font-size: 14px;">${headline}</div>
+         <div class="insight-list">${rows}</div>
+       </div>`
+    );
+  }
+
+  // Movers-section subtitle
+  const moversSub = document.getElementById('insights_movers_period');
+  if (moversSub) {
+    if (baseYm && endYm && baseYm !== endYm) {
+      moversSub.innerHTML = 'Anchored on <b>' + prettyYM(baseYm) + '</b> vs <b>' + prettyYM(endYm) + '</b>.';
+    } else {
+      moversSub.textContent = 'Pick a wider From / To window to see rank & share shifts.';
+    }
+  }
+
+  // ----- Mount everything -----
+  document.getElementById('insights_snapshot').innerHTML = snapshot.join('');
+  document.getElementById('insights_movement').innerHTML = movement.join('') || '<div class="no-data">No prior-year data to compare against in the selected window.</div>';
+  document.getElementById('insights_structure').innerHTML = structure.join('');
+  document.getElementById('insights_movers').innerHTML = movers.join('') || '<div class="no-data">Not enough data in the current window to compute rank / share shifts.</div>';
 }
 
 // ----- "Showing: …" filter-summary chip per chart card -----
